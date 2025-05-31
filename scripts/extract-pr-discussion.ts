@@ -1,3 +1,4 @@
+#!/usr/bin/env tsx
 import { execSync } from "child_process";
 import { LinearClient } from "@linear/sdk";
 import clipboardy from "clipboardy";
@@ -15,6 +16,20 @@ const logError = (message: string) =>
   console.error("\x1b[31m%s\x1b[0m", message); // Red
 const logWarning = (message: string) =>
   console.warn("\x1b[33m%s\x1b[0m", message); // Yellow
+
+// Handle both npm script usage and direct CLI usage
+function normalizeArgs(args: string[]): string[] {
+  // If called directly (e.g., jules-extract-pr), process all args
+  // If called via npm/tsx, skip the script path
+  const scriptName = args.find((arg) =>
+    arg.endsWith("extract-pr-discussion.ts")
+  );
+  if (scriptName) {
+    const scriptIndex = args.indexOf(scriptName);
+    return args.slice(scriptIndex + 1);
+  }
+  return args;
+}
 
 interface PRInfo {
   number: number;
@@ -527,8 +542,8 @@ function formatOutput(extractedData: ExtractedData): string {
         review.priority === "HIGH"
           ? "🚨"
           : review.priority === "MEDIUM"
-            ? "⚠️"
-            : "ℹ️";
+          ? "⚠️"
+          : "ℹ️";
       output += `**Review ${index + 1}** ${priorityEmoji} ${review.priority}\n`;
       output += `**Reviewer:** ${review.author}\n`;
       output += `**State:** ${review.state}\n`;
@@ -542,15 +557,12 @@ function formatOutput(extractedData: ExtractedData): string {
     output += `**HUMAN INLINE CODE COMMENTS** 💻\n\n`;
 
     // Group by file for better organization
-    const commentsByFile = humanReviewComments.reduce(
-      (acc, comment) => {
-        const file = comment.path || "General";
-        if (!acc[file]) acc[file] = [];
-        acc[file].push(comment);
-        return acc;
-      },
-      {} as Record<string, Comment[]>
-    );
+    const commentsByFile = humanReviewComments.reduce((acc, comment) => {
+      const file = comment.path || "General";
+      if (!acc[file]) acc[file] = [];
+      acc[file].push(comment);
+      return acc;
+    }, {} as Record<string, Comment[]>);
 
     Object.entries(commentsByFile).forEach(([file, comments]) => {
       output += `**File: ${file}**\n`;
@@ -564,16 +576,20 @@ function formatOutput(extractedData: ExtractedData): string {
             comment.priority === "HIGH"
               ? "🚨"
               : comment.priority === "MEDIUM"
-                ? "⚠️"
-                : "ℹ️";
-          output += `**Comment ${index + 1}** ${priorityEmoji} ${comment.priority}\n`;
+              ? "⚠️"
+              : "ℹ️";
+          output += `**Comment ${index + 1}** ${priorityEmoji} ${
+            comment.priority
+          }\n`;
           if (comment.line) {
             output += `**Line:** ${comment.line}\n`;
           }
           output += `**Reviewer:** ${comment.author}\n`;
           output += `**Comment:** ${comment.body}\n`;
           if (comment.diff_hunk) {
-            output += `**Code Context:**\n\`\`\`\n${truncateCodeContext(comment.diff_hunk)}\n\`\`\`\n`;
+            output += `**Code Context:**\n\`\`\`\n${truncateCodeContext(
+              comment.diff_hunk
+            )}\n\`\`\`\n`;
           }
           output += `\n`;
         });
@@ -593,9 +609,11 @@ function formatOutput(extractedData: ExtractedData): string {
         comment.priority === "HIGH"
           ? "🚨"
           : comment.priority === "MEDIUM"
-            ? "⚠️"
-            : "ℹ️";
-      output += `**Comment ${index + 1}** ${priorityEmoji} ${comment.priority}\n`;
+          ? "⚠️"
+          : "ℹ️";
+      output += `**Comment ${index + 1}** ${priorityEmoji} ${
+        comment.priority
+      }\n`;
       output += `**Author:** ${comment.author}\n`;
       output += `**Comment:** ${comment.body}\n`;
       output += `**Posted:** ${comment.created_at}\n`;
@@ -618,7 +636,10 @@ function formatOutput(extractedData: ExtractedData): string {
 
     [...botReviews, ...botReviewComments, ...botIssueComments].forEach(
       (comment) => {
-        const summary = `${comment.author}: ${comment.body.substring(0, 100)}...`;
+        const summary = `${comment.author}: ${comment.body.substring(
+          0,
+          100
+        )}...`;
         botSummary[comment.priority!].push(summary);
       }
     );
@@ -817,7 +838,7 @@ async function julesMode(extractedData: ExtractedData): Promise<void> {
 
 async function main() {
   try {
-    const args = process.argv.slice(2);
+    const args = normalizeArgs(process.argv.slice(2));
 
     if (args.includes("--help") || args.includes("-h")) {
       console.log(`

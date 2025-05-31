@@ -18,6 +18,18 @@ interface WorkflowOptions {
   summary?: boolean;
 }
 
+// Handle both npm script usage and direct CLI usage
+function normalizeArgs(args: string[]): string[] {
+  // If called directly (e.g., jules-pr), process all args
+  // If called via npm/tsx, skip the script path
+  const scriptName = args.find((arg) => arg.endsWith("pr-workflow.ts"));
+  if (scriptName) {
+    const scriptIndex = args.indexOf(scriptName);
+    return args.slice(scriptIndex + 1);
+  }
+  return args;
+}
+
 async function getCurrentBranchPR(): Promise<number | null> {
   try {
     const currentBranch = execSync("git branch --show-current", {
@@ -103,7 +115,7 @@ async function runExtractPR(input: string, options: WorkflowOptions = {}) {
 }
 
 async function main() {
-  const args = process.argv.slice(2);
+  const args = normalizeArgs(process.argv.slice(2));
 
   if (args.includes("--help") || args.includes("-h")) {
     console.log(`

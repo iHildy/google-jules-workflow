@@ -16,6 +16,18 @@ const logError = (message: string) =>
 const logWarning = (message: string) =>
   console.warn("\x1b[33m%s\x1b[0m", message);
 
+// Handle both npm script usage and direct CLI usage
+function normalizeArgs(args: string[]): string[] {
+  // If called directly (e.g., jules-pr-manager), process all args
+  // If called via npm/tsx, skip the script path
+  const scriptName = args.find((arg) => arg.endsWith("pr-manager.ts"));
+  if (scriptName) {
+    const scriptIndex = args.indexOf(scriptName);
+    return args.slice(scriptIndex + 1);
+  }
+  return args;
+}
+
 // Create readline interface for user input
 let rl: any = null;
 
@@ -279,10 +291,14 @@ function formatPRList(prs: PRInfo[], title: string): string {
     const timeAgo = new Date(pr.lastCommitDate).toLocaleDateString();
     const draftStatus = pr.isDraft ? " 📝 DRAFT" : "";
 
-    output += `${index + 1}. ${priorityEmoji} **PR #${pr.number}**: ${pr.title}${linearInfo}${draftStatus}\n`;
+    output += `${index + 1}. ${priorityEmoji} **PR #${pr.number}**: ${
+      pr.title
+    }${linearInfo}${draftStatus}\n`;
     output += `   - **Branch**: \`${pr.branch}\`\n`;
     output += `   - **Last Commit**: ${pr.lastCommitAuthor} on ${timeAgo}\n`;
-    output += `   - **Copilot Reviewed**: ${pr.copilotReviewed ? "✅ Yes" : "❌ No"}\n`;
+    output += `   - **Copilot Reviewed**: ${
+      pr.copilotReviewed ? "✅ Yes" : "❌ No"
+    }\n`;
     output += `   - **Commits After Review**: ${pr.commitsAfterCopilotReview}\n`;
     output += `   - **URL**: ${pr.url}\n\n`;
   });
@@ -568,7 +584,9 @@ function formatLinearIssueList(
   issues.forEach((issue, index) => {
     const priorityEmoji = getPriorityEmoji(issue.priority || 0);
 
-    output += `${index + 1}. ${priorityEmoji} **${issue.id}**: ${issue.title}\n`;
+    output += `${index + 1}. ${priorityEmoji} **${issue.id}**: ${
+      issue.title
+    }\n`;
     output += `   - **Team**: ${issue.team}\n`;
     output += `   - **State**: ${issue.state}\n`;
     output += `   - **Priority**: ${issue.priorityLabel}\n`;
@@ -641,7 +659,7 @@ async function interactiveLinearReview(
 
 async function main() {
   try {
-    const args = process.argv.slice(2);
+    const args = normalizeArgs(process.argv.slice(2));
 
     if (args.includes("--help") || args.includes("-h")) {
       console.log(`

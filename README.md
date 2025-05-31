@@ -7,6 +7,7 @@ A comprehensive suite of TypeScript scripts designed to streamline AI-powered de
 ## 📋 Table of Contents
 
 - [Why These Scripts?](#-why-these-scripts)
+- [Quick Installation](#-quick-installation)
 - [Quick Command Reference](#-quick-command-reference)
 - [Optimal Workflow Guide](#-optimal-workflow-guide)
 - [Setup Guide](#️-setup-guide)
@@ -27,27 +28,118 @@ Google Jules is powerful but has workflow friction points:
 - **Manual Copy-Paste**: Repeatedly copying branch names, PR discussions, and issue context
 - **Review Overhead**: Managing the Jules → Copilot → Jules feedback loop manually
 
+## ⚡ Quick Installation
+
+### **Option 1: Global Installation (Recommended)**
+
+Install globally for system-wide access:
+
+```bash
+npm install -g @ihildy/google-jules-workflow
+```
+
+Then use commands directly:
+
+```bash
+jules-pr --help
+jules-pr-manager
+jules-extract-pr
+```
+
+### **Option 2: One-time Usage**
+
+Run commands without installing:
+
+```bash
+npx @ihildy/google-jules-workflow jules-pr
+npx @ihildy/google-jules-workflow jules-pr-manager
+```
+
+### **Option 3: Project Installation**
+
+Install in your project:
+
+```bash
+npm install @ihildy/google-jules-workflow
+# or
+pnpm add @ihildy/google-jules-workflow
+# or
+yarn add @ihildy/google-jules-workflow
+```
+
+Then use via npm scripts or npx:
+
+```bash
+npx jules-pr --help
+# or add to your package.json scripts
+```
+
+<details>
+<summary><strong>📦 Manual Installation (Development)</strong></summary>
+
+For development or customization:
+
+1. **Clone the repository**
+
+   ```bash
+   git clone https://github.com/iHildy/google-jules-workflow.git
+   cd google-jules-workflow
+   ```
+
+2. **Install dependencies**
+
+   ```bash
+   pnpm install
+   # or npm install / yarn install
+   ```
+
+3. **Authenticate GitHub CLI** (if not done)
+
+   ```bash
+   gh auth login
+   ```
+
+4. **Test the setup**
+
+   ```bash
+   pnpm run pr-manager --help
+   ```
+
+5. **Optional: Link globally for development**
+   ```bash
+   npm link
+   # Now you can use jules-pr anywhere
+   ```
+
+</details>
+
 ## 📚 Quick Command Reference
 
-### **PR Discussion Extraction**
+### **🔧 Global Commands (after installation)**
 
-- **`pnpm run pr`** - Auto-detect current branch and extract unified PR/issue discussion
-- **`pnpm run pr-jules`** - Jules mode: copy branch name first, then full discussion
-- **`pnpm run pr-summary`** - Extract with AI-powered summary and insights
-- **`pnpm run pr-js`** - Combined Jules mode + AI summary
-- **`pnpm run pr <number|ID>`** - Extract specific GitHub PR or Linear issue
+- **`jules-pr`** - Auto-detect current branch and extract unified PR/issue discussion
+- **`jules-pr --jules`** - Jules mode: copy branch name first, then full discussion
+- **`jules-pr --summary`** - Extract with AI-powered summary and insights
+- **`jules-pr --jules --summary`** - Combined Jules mode + AI summary
+- **`jules-pr <number|ID>`** - Extract specific GitHub PR or Linear issue
 
-### **PR Workflow Management**
+### **📊 PR Management Commands**
 
-- **`pnpm run pr-manager`** - Overview of PRs needing attention in Jules/Copilot workflow
-- **`pnpm run pr-assign-copilot`** - Auto-assign GitHub Copilot to PRs where Jules made commits
-- **`pnpm run pr-list-needing-review`** - PRs where Jules committed but Copilot hasn't reviewed latest changes
-- **`pnpm run pr-list-needing-update`** - PRs where Copilot reviewed but Jules hasn't addressed feedback (interactive mode)
-- **`pnpm run pr-list-linear-issues`** - Linear issues without PRs ready for development (interactive mode)
+- **`jules-pr-manager`** - Overview of PRs needing attention in Jules/Copilot workflow
+- **`jules-pr-manager assign-copilot`** - Auto-assign GitHub Copilot to PRs where Jules made commits
+- **`jules-pr-manager list-needing-review`** - PRs where Jules committed but Copilot hasn't reviewed
+- **`jules-pr-manager list-needing-update`** - PRs where Copilot reviewed but Jules hasn't addressed feedback
+- **`jules-pr-manager list-linear-issues`** - Linear issues without PRs ready for development
 
-### **Advanced Options**
+### **🛠️ Alternative Usage (if using npm scripts)**
 
-- **`pnpm run extract-pr <ID> --save filename`** - Save extraction output to file instead of clipboard
+If you installed the package in your project, you can also use these scripts:
+
+- **`npm run pr`** - Same as `jules-pr`
+- **`npm run pr-jules`** - Same as `jules-pr --jules`
+- **`npm run pr-summary`** - Same as `jules-pr --summary`
+- **`npm run pr-js`** - Same as `jules-pr --jules --summary`
+- **`npm run pr-manager`** - Same as `jules-pr-manager`
 
 ## 🚀 Optimal Workflow Guide
 
@@ -56,8 +148,9 @@ Google Jules is powerful but has workflow friction points:
 **Step 1: Find Work**
 
 Find issues ready for development
+
 ```bash
-pnpm run pr-list-linear-issues
+jules-pr-manager list-linear-issues
 ```
 
 Select issue → Provide context to Jules
@@ -65,21 +158,23 @@ Select issue → Provide context to Jules
 **Step 2: Development** (once Jules is done and branch is published)
 
 Request Copilot review for Jules to act on later.
+
 ```bash
-pnpm run pr-assign-copilot
+jules-pr-manager assign-copilot
 ```
 
 **Step 3: Address Review**
 
 Get PRs that have been reviewed by Copilot but not updated by Jules, provide the output to Jules to update the branch
+
 ```bash
-pnpm run pr-list-needing-update
+jules-pr-manager list-needing-update
 ```
 
 **Step 4: Status Check**
 
 ```bash
-pnpm run pr-manager # Check overall workflow status
+jules-pr-manager # Check overall workflow status
 ```
 
 **Step 5: Continue or Complete**
@@ -93,7 +188,7 @@ If approved: Task complete, return to Step 1
 **Jules Mode** is specifically designed for AI coding agents:
 
 ```bash
-pnpm run pr-jules
+jules-pr --jules
 ```
 
 **Step 1:** Copies branch name (e.g., `feature/GRE-213-disable-donations-toggle`) for the task input in Jules
@@ -111,24 +206,24 @@ pnpm run pr-jules
 
 ```bash
 # Currently working on PR, need context
-pnpm run pr # Auto-detect current branch
+jules-pr # Auto-detect current branch
 
 # Need to review specific issue
-pnpm run pr GRE-456 # Extract Linear issue + find GitHub PR
+jules-pr GRE-456 # Extract Linear issue + find GitHub PR
 
 # Need to review specific PR
-pnpm run pr 123 # Extract GitHub PR + find Linear issue
+jules-pr 123 # Extract GitHub PR + find Linear issue
 ```
 
 ### **📊 Batch Processing**
 
 ```bash
 # Process all PRs needing attention
-pnpm run pr-list-needing-update
+jules-pr-manager list-needing-update
 # Choose 'j' for each PR to run Jules mode automatically
 
 # Start multiple new features
-pnpm run pr-list-linear-issues
+jules-pr-manager list-linear-issues
 # Choose 'j' for each issue to extract context
 ```
 
@@ -136,42 +231,41 @@ pnpm run pr-list-linear-issues
 
 ### **Prerequisites**
 
-- **Node.js 18+** with pnpm
+- **Node.js 18+** (with npm, pnpm, or yarn)
 - **GitHub CLI** (`gh`) installed and authenticated
 - **Linear account** with API access (optional but highly recommended)
 - **Google Jules** or similar AI coding agent
 
-### **Installation**
-Clone this repository
-```
-git clone https://github.com/iHildy/google-jules-workflow.git
-```
-```
-cd google-jules-workflow
-```
+### **Quick Setup**
 
-Install dependencies
-```
-pnpm install child_process @linear/sdk clipboardy dotenv @google/genai readline
-```
+1. **Install the package globally**
 
-Authenticate GitHub CLI (if not done)
-```
-gh auth login
-```
+   ```bash
+   npm install -g @ihildy/google-jules-workflow
+   ```
 
-Test the setup
-```
-pnpm run pr-manager --help
-```
+2. **Authenticate GitHub CLI** (if not done)
+
+   ```bash
+   gh auth login
+   ```
+
+3. **Test the installation**
+
+   ```bash
+   jules-pr --help
+   ```
+
+4. **Optional: Configure environment variables** (see below)
 
 ### **Environment Configuration**
 
-Create a `.env` file in the project root:
+Create a `.env` file in your project root or set environment variables:
 
 ```bash
 # Required for Linear integration (highly recommended)
 LINEAR_API_KEY=your_linear_api_key_here
+
 # Required for AI summaries (optional but useful)
 GEMINI_API_KEY=your_gemini_api_key_here
 ```
@@ -181,22 +275,22 @@ GEMINI_API_KEY=your_gemini_api_key_here
 - **Linear API Key**: Linear Settings → API → Personal API Keys
 - **Gemini API Key**: [Google AI Studio](https://aistudio.google.com/) → Get API Key
 
-### **Package.json Integration**
+### **Package.json Integration (Optional)**
 
-Add these scripts to your project's `package.json`:
+If you want to add these to your project's package.json scripts:
+
 ```json
 {
   "scripts": {
-    "pr": "tsx ./scripts/pr-workflow.ts",
-    "pr-jules": "tsx ./scripts/pr-workflow.ts --jules",
-    "pr-summary": "tsx ./scripts/pr-workflow.ts --summary",
-    "pr-js": "tsx ./scripts/pr-workflow.ts --jules --summary",
-    "pr-manager": "tsx ./scripts/pr-manager.ts",
-    "pr-assign-copilot": "tsx ./scripts/pr-manager.ts assign-copilot",
-    "pr-list-needing-review": "tsx ./scripts/pr-manager.ts list-needing-review",
-    "pr-list-needing-update": "tsx ./scripts/pr-manager.ts list-needing-update",
-    "pr-list-linear-issues": "tsx ./scripts/pr-manager.ts list-linear-issues",
-    "extract-pr": "tsx ./scripts/extract-pr-discussion.ts"
+    "pr": "jules-pr",
+    "pr-jules": "jules-pr --jules",
+    "pr-summary": "jules-pr --summary",
+    "pr-js": "jules-pr --jules --summary",
+    "pr-manager": "jules-pr-manager",
+    "pr-assign-copilot": "jules-pr-manager assign-copilot",
+    "pr-list-needing-review": "jules-pr-manager list-needing-review",
+    "pr-list-needing-update": "jules-pr-manager list-needing-update",
+    "pr-list-linear-issues": "jules-pr-manager list-linear-issues"
   }
 }
 ```
@@ -204,6 +298,7 @@ Add these scripts to your project's `package.json`:
 ## ✨ Key Features
 
 ### **🔗 Unified Context Extraction**
+
 - **Smart Linking**: Automatically connects Linear issues with GitHub PRs
 - **Branch Intelligence**: Parses branch names to find related items
 - **Interactive Fallback**: Prompts when auto-detection fails
@@ -236,11 +331,16 @@ Add these scripts to your project's `package.json`:
 Add these to your shell profile (`.zshrc`, `.bashrc`):
 
 ```bash
-alias pr="pnpm run pr"
-alias prj="pnpm run pr-jules"  # Jules mode
-alias prs="pnpm run pr-summary"  # AI summary
-alias prjs="pnpm run pr-js"  # Jules + Summary
-alias prm="pnpm run pr-manager"  # Workflow status
+# Global commands (recommended)
+alias pr="jules-pr"
+alias prj="jules-pr --jules"  # Jules mode
+alias prs="jules-pr --summary"  # AI summary
+alias prjs="jules-pr --jules --summary"  # Jules + Summary
+alias prm="jules-pr-manager"  # Workflow status
+
+# Alternative using npx (if not globally installed)
+alias pr="npx @ihildy/google-jules-workflow jules-pr"
+alias prm="npx @ihildy/google-jules-workflow jules-pr-manager"
 ```
 
 ### **Integration with Other Tools**
@@ -254,7 +354,14 @@ alias prm="pnpm run pr-manager"  # Workflow status
     {
       "label": "PR Context",
       "type": "shell",
-      "command": "pnpm run pr-jules",
+      "command": "jules-pr",
+      "args": ["--jules"],
+      "group": "build"
+    },
+    {
+      "label": "PR Manager",
+      "type": "shell",
+      "command": "jules-pr-manager",
       "group": "build"
     }
   ]
@@ -265,7 +372,28 @@ alias prm="pnpm run pr-manager"  # Workflow status
 
 ```bash
 #!/bin/sh
-pnpm run pr 2>/dev/null || true
+jules-pr 2>/dev/null || true
+```
+
+**GitHub Actions** (`.github/workflows/pr-automation.yml`):
+
+```yaml
+name: PR Automation
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  assign-copilot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+      - run: npx @ihildy/google-jules-workflow jules-pr-manager assign-copilot
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 
 ## 📊 Priority Classification System
@@ -314,6 +442,12 @@ Comments are automatically classified using intelligent keyword detection:
 
 ### **Common Issues**
 
+**Command not found: `jules-pr`**
+
+- Ensure you installed globally: `npm install -g @ihildy/google-jules-workflow`
+- Or use npx: `npx @ihildy/google-jules-workflow jules-pr`
+- Check your PATH includes npm global binaries: `npm bin -g`
+
 **Clipboard not working:**
 
 - Check terminal output for "📋 CONTENT BEING COPIED TO CLIPBOARD" section
@@ -332,23 +466,36 @@ Comments are automatically classified using intelligent keyword detection:
 - Check Linear API key permissions
 - Ensure team/workspace access
 
+**Permission errors on execution:**
+
+- The scripts should be executable by default, but if you encounter issues:
+  ```bash
+  chmod +x ./node_modules/@ihildy/google-jules-workflow/scripts/*.ts
+  ```
+
 ### **Debug Mode**
 
 ```bash
 # Enable detailed logging
-pnpm run pr 123 --debug
+jules-pr 123 --debug
 
 # Save output for inspection
-pnpm run pr 123 --save debug-output.md
+jules-pr 123 --save debug-output.md
+
+# Test specific components
+jules-pr-manager list-needing-review --verbose
 ```
 
 ## 🎯 Best Practices
 
-1. **Start with Auto-Detection**: `pnpm run pr` works for most cases
-2. **Use Jules Mode for AI Sessions**: `pnpm run pr-jules` for streamlined workflows
-3. **Daily Workflow Checks**: `pnpm run pr-manager` for status overview
-4. **Address Reviews Promptly**: `pnpm run pr-list-needing-update` before new work
-5. **Save Important Extractions**: Use `--save` flag for complex discussions
+1. **Install Globally**: `npm install -g @ihildy/google-jules-workflow` for best experience
+2. **Start with Auto-Detection**: `jules-pr` works for most cases
+3. **Use Jules Mode for AI Sessions**: `jules-pr --jules` for streamlined workflows
+4. **Daily Workflow Checks**: `jules-pr-manager` for status overview
+5. **Address Reviews Promptly**: `jules-pr-manager list-needing-update` before new work
+6. **Save Important Extractions**: Use `--save` flag for complex discussions
+7. **Set Up Environment Variables**: Configure `LINEAR_API_KEY` and `GEMINI_API_KEY` for full functionality
+8. **Use Aliases**: Set up shell aliases for faster access to commands
 
 ## 📄 License
 
@@ -361,4 +508,3 @@ Found a bug or have a feature request? Please open an issue or submit a PR.
 ---
 
 **Made with ❤️ to make Google Jules development enjoyable.**
-```
