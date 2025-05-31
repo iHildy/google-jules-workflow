@@ -208,11 +208,33 @@ async function julesMode(input: string, output: string): Promise<void> {
       console.log("=".repeat(80));
       logSuccess("✅ Output copied to clipboard!");
     } else {
-      // For Linear issues without branches, skip two-step process and copy metadata directly
+      // For Linear issues without branches, use two-step process with Linear issue ID
       const linearMatch = input.match(/([A-Z]{2,10}-\d+)/);
       if (linearMatch) {
-        logInfo(`📋 No existing branch found for ${linearMatch[1]}`);
-        logInfo("🚀 Copying Linear issue metadata directly...");
+        const linearId = linearMatch[1];
+
+        // Step 1: Copy the Linear issue ID first
+        clipboardy.writeSync(linearId);
+        logSuccess(
+          `📋 Step 1: Linear issue ID copied to clipboard: ${linearId}`
+        );
+
+        // Step 2: Wait for user and then copy full discussion
+        const readline = createInterface({
+          input: process.stdin,
+          output: process.stdout,
+        });
+
+        await new Promise<void>((resolve) => {
+          readline.question(
+            "✨ Press Enter to continue and copy the full Linear discussion...",
+            () => {
+              readline.close();
+              resolve();
+            }
+          );
+        });
+
         clipboardy.writeSync(output.trim());
 
         // Show clipboard content with same format as other parts of codebase
@@ -281,7 +303,7 @@ USAGE:
   --help, -h           Show this help
 
 🎯 **JULES MODE:**
-  1. First copies branch name to clipboard
+  1. First copies branch name to clipboard (or Linear issue ID if no PR)
   2. Wait for Enter key press  
   3. Then copies full discussion
 

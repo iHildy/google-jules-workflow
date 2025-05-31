@@ -1,0 +1,78 @@
+# Put this in .github/workflows
+name: Auto Draft PR from google-labs-jules commits
+
+on:
+  push:
+    branches-ignore:
+      - main
+
+jobs:
+  create-draft-pr:
+    runs-on: ubuntu-latest
+
+    # Only run if the HEAD commit was made by the google-labs-jules GitHub App
+    if: ${{ github.event.head_commit.committer.username == 'google-labs-jules' }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check if PR already exists
+        id: check-pr
+        run: |
+          # Check if a PR already exists for this branch
+          existing_pr=$(gh pr list --head "${{ github.ref_name }}" --json number --jq '.[0].number // empty')
+          if [[ -n "$existing_pr" ]]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "pr_number=$existing_pr" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract commit message parts
+        id: extract
+        if: steps.check-pr.outputs.exists == 'false'
+        run: |
+          # Get the full commit message
+          full_message="${{ github.event.head_commit.message }}"
+
+          # Extract title (first line) and body (remaining lines)
+          title=$(echo "$full_message" | head -n1)
+          body=$(echo "$full_message" | tail -n +2 | sed '/^$/d')
+
+          # Fallback title if empty
+          if [[ -z "$title" ]]; then
+            title="Draft: Updates from google-labs-jules"
+          fi
+
+          # Add workflow context to body
+          workflow_context=$'\n\n---\n*This PR was automatically created by the Google Jules Workflow Optimizer when google-labs-jules pushed to branch `${{ github.ref_name }}`.*\n\n*Use `jules-pr --jules` to extract this PR'\''s discussion for Jules review.*'
+
+          combined_body="${body}${workflow_context}"
+
+          echo "title=$title" >> $GITHUB_OUTPUT
+          echo "body<<EOF" >> $GITHUB_OUTPUT
+          echo "$combined_body" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create Draft Pull Request
+        if: steps.check-pr.outputs.exists == 'false'
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          base: main
+          branch: ${{ github.ref_name }}
+          title: ${{ steps.extract.outputs.title }}
+          body: ${{ steps.extract.outputs.body }}
+          draft: true
+          labels: |
+            google-jules
+            auto-generated
+
+      - name: Skip - PR already exists
+        if: steps.check-pr.outputs.exists == 'true'
+        run: |
+          echo "::notice::PR #${{ steps.check-pr.outputs.pr_number }} already exists for branch ${{ github.ref_name }}"

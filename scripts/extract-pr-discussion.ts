@@ -487,6 +487,9 @@ function formatOutput(extractedData: ExtractedData): string {
 
   // For Linear-only issues (no PR found), use simplified format
   if (linearInfo && !prInfo) {
+    // Start with the Linear issue ID, like how branch names start PR discussions
+    output += `${linearInfo.id}\n\n`;
+
     // Use the Linear issue title as the main title
     output += `# ${linearInfo.title}\n\n`;
 
@@ -516,6 +519,11 @@ function formatOutput(extractedData: ExtractedData): string {
         output += `- ${comment.user.name}:\n\n  ${comment.body}\n\n`;
       });
     }
+
+    // Jules Rules for Linear-only issues
+    output += `**Jules Rules**\n`;
+    output += `- You don't have access to project environmental variables. If you must make an edit / migration of the database please instead edit prisma schema file and leave it as is, assuming a human will migrate it later.\n`;
+    output += `- When publishing the github branch the name MUST BE THE FULL EXACT the FROM branch mentioned at the top of the output (but not the shortened version at the top of the output). For Linear-only issues without an existing branch, create an appropriate branch name from the Linear issue ID and title.\n`;
 
     return output;
   }
@@ -885,29 +893,54 @@ async function processInput(input: string): Promise<ExtractedData> {
 }
 
 async function julesMode(extractedData: ExtractedData): Promise<void> {
-  // First copy the branch name
-  const branchName =
-    extractedData.prDetails?.head_ref ||
-    extractedData.linearInfo?.branchName ||
-    "unknown-branch";
+  // Check if this is a Linear-only issue (no PR found)
+  if (extractedData.linearInfo && !extractedData.prInfo) {
+    // For Linear-only issues, copy the Linear issue ID first
+    const linearId = extractedData.linearInfo.id;
 
-  try {
-    clipboardy.writeSync(branchName);
-    logSuccess(`📋 Step 1: Branch name copied to clipboard: ${branchName}`);
+    try {
+      clipboardy.writeSync(linearId);
+      logSuccess(`📋 Step 1: Linear issue ID copied to clipboard: ${linearId}`);
 
-    // Wait for user to press any key
-    await promptUser(
-      "✨ Press Enter to continue and copy the full PR discussion..."
-    );
+      // Wait for user to press any key
+      await promptUser(
+        "✨ Press Enter to continue and copy the full Linear discussion..."
+      );
 
-    // Now copy the full discussion
-    const fullOutput = formatOutput(extractedData);
-    clipboardy.writeSync(fullOutput);
-    logSuccess("📋 Step 2: Full PR discussion copied to clipboard!");
-  } catch (error) {
-    logWarning("Could not access clipboard");
-    console.log(`\n🔖 Branch name: ${branchName}\n`);
-    await promptUser("Press Enter to continue...");
+      // Now copy the full discussion
+      const fullOutput = formatOutput(extractedData);
+      clipboardy.writeSync(fullOutput);
+      logSuccess("📋 Step 2: Full Linear discussion copied to clipboard!");
+    } catch (error) {
+      logWarning("Could not access clipboard");
+      console.log(`\n🔖 Linear issue ID: ${linearId}\n`);
+      await promptUser("Press Enter to continue...");
+    }
+  } else {
+    // For PRs (with or without Linear issues), copy the branch name first
+    const branchName =
+      extractedData.prDetails?.head_ref ||
+      extractedData.linearInfo?.branchName ||
+      "unknown-branch";
+
+    try {
+      clipboardy.writeSync(branchName);
+      logSuccess(`📋 Step 1: Branch name copied to clipboard: ${branchName}`);
+
+      // Wait for user to press any key
+      await promptUser(
+        "✨ Press Enter to continue and copy the full PR discussion..."
+      );
+
+      // Now copy the full discussion
+      const fullOutput = formatOutput(extractedData);
+      clipboardy.writeSync(fullOutput);
+      logSuccess("📋 Step 2: Full PR discussion copied to clipboard!");
+    } catch (error) {
+      logWarning("Could not access clipboard");
+      console.log(`\n🔖 Branch name: ${branchName}\n`);
+      await promptUser("Press Enter to continue...");
+    }
   }
 }
 
@@ -927,7 +960,7 @@ EXAMPLES:
   npm run extract-pr GRE-456    Extract Linear issue GRE-456 (+ find GitHub PR)
 
 OPTIONS:
-  -j, --jules               Jules mode: Copy branch name first, then full discussion
+  -j, --jules               Jules mode: Copy branch name first (or Linear issue ID if no PR), then full discussion
   -s, --summary             Generate AI summary using Gemini
   --no-clipboard-output     Suppress clipboard operations and debug output (for script usage)
   --help                    Show this help
