@@ -29,12 +29,15 @@
   },
   "main": "./scripts/pr-workflow.ts",
   "bin": {
-    "jules-pr": "scripts/jules-pr.js"
+    "jules-pr": "scripts/jules-pr.js",
+    "jules-config-init": "scripts/jules-config-init.js"
   },
   "files": [
     "scripts/",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "jules-workflow.config.js",
+    "jules-workflow.config.example.js"
   ],
   "scripts": {
     "pr": "tsx ./scripts/pr-workflow.ts",
@@ -47,6 +50,7 @@
     "pr-list-needing-update": "tsx ./scripts/pr-manager.ts list-needing-update",
     "pr-list-linear-issues": "tsx ./scripts/pr-manager.ts list-linear-issues",
     "extract-pr": "tsx ./scripts/extract-pr-discussion.ts",
+    "jules-config-init": "tsx ./scripts/config-init.ts",
     "postinstall": "echo '\n🎉 Google Jules Workflow installed successfully!\n\nQuick start: jules-pr --help\nFor setup guide: https://github.com/iHildy/google-jules-workflow#setup-guide\n'"
   },
   "dependencies": {

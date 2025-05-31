@@ -6,17 +6,55 @@ import dotenv from "dotenv";
 import clipboardy from "clipboardy";
 import { join } from "path";
 import { executeTsFile } from "./tsx-utils";
+import {
+  getConfig,
+  JulesWorkflowConfig,
+  isConfigFound,
+  showConfigWarning,
+} from "./config-loader";
 
 // Load environment variables from .env file
 dotenv.config();
 
-const logInfo = (message: string) => console.log("\x1b[36m%s\x1b[0m", message);
-const logSuccess = (message: string) =>
-  console.log("\x1b[32m%s\x1b[0m", message);
-const logError = (message: string) =>
-  console.error("\x1b[31m%s\x1b[0m", message);
-const logWarning = (message: string) =>
-  console.warn("\x1b[33m%s\x1b[0m", message);
+// Load configuration
+const config: JulesWorkflowConfig = getConfig();
+
+// Show warning if no config file found
+if (!isConfigFound()) {
+  showConfigWarning();
+}
+
+const logInfo = (message: string) => {
+  if (config.display.enableColors) {
+    console.log("\x1b[36m%s\x1b[0m", message);
+  } else {
+    console.log(message);
+  }
+};
+
+const logSuccess = (message: string) => {
+  if (config.display.enableColors) {
+    console.log("\x1b[32m%s\x1b[0m", message);
+  } else {
+    console.log(message);
+  }
+};
+
+const logError = (message: string) => {
+  if (config.display.enableColors) {
+    console.error("\x1b[31m%s\x1b[0m", message);
+  } else {
+    console.error(message);
+  }
+};
+
+const logWarning = (message: string) => {
+  if (config.display.enableColors) {
+    console.warn("\x1b[33m%s\x1b[0m", message);
+  } else {
+    console.warn(message);
+  }
+};
 
 // Handle both npm script usage and direct CLI usage
 function normalizeArgs(args: string[]): string[] {
@@ -133,12 +171,27 @@ async function getAllOpenPRs(): Promise<PRInfo[]> {
 
     for (const pr of prs) {
       try {
+        // Apply draft filtering if configured
+        if (config.prManager.filtering.excludeDrafts && pr.draft) {
+          continue;
+        }
+
         // Get the last commit for this PR
         const lastCommitOutput = execSync(
           `gh api repos/${owner}/${repo}/pulls/${pr.number}/commits --jq '.[-1] | {author: .commit.author.name, date: .commit.author.date}'`,
           { encoding: "utf-8" }
         );
         const lastCommit = JSON.parse(lastCommitOutput);
+
+        // Apply date filtering if configured
+        if (config.prManager.filtering.maxDaysOld) {
+          const lastCommitDate = new Date(lastCommit.date);
+          const daysSinceCommit =
+            (Date.now() - lastCommitDate.getTime()) / (1000 * 60 * 60 * 24);
+          if (daysSinceCommit > config.prManager.filtering.maxDaysOld) {
+            continue;
+          }
+        }
 
         // Check if copilot has reviewed this PR
         const reviewsOutput = execSync(
@@ -271,39 +324,83 @@ function sortPRsByUrgencyAndDate(prs: PRInfo[]): PRInfo[] {
 }
 
 function getPriorityEmoji(urgency: number): string {
-  if (urgency === 1) return "🔥"; // Urgent
-  if (urgency === 2) return "⚠️"; // High
-  if (urgency === 3) return "📋"; // Medium
-  if (urgency === 4) return "💤"; // Low
-  return "💤"; // No priority or unknown
+  if (urgency === 1) return config.priority.priorityEmojis.HIGH; // Urgent
+  if (urgency === 2) return config.priority.priorityEmojis.HIGH; // High
+  if (urgency === 3) return config.priority.priorityEmojis.MEDIUM; // Medium
+  if (urgency === 4) return config.priority.priorityEmojis.LOW; // Low
+  return config.priority.priorityEmojis.LOW; // No priority or unknown
 }
 
 function formatPRList(prs: PRInfo[], title: string): string {
-  if (prs.length === 0) {
-    return `## ${title}\n\n✅ No PRs found matching criteria.\n\n`;
+  // Apply max items limit if configured
+  const limitedPRs =
+    config.prManager.listFormatting.maxItemsPerList > 0
+      ? prs.slice(0, config.prManager.listFormatting.maxItemsPerList)
+      : prs;
+
+  if (limitedPRs.length === 0) {
+    if (shouldShowEmptySections()) {
+      return `## ${title}\n\n✅ No PRs found matching criteria.\n\n`;
+    }
+    return "";
   }
 
   let output = `## ${title}\n\n`;
 
-  prs.forEach((pr, index) => {
+  limitedPRs.forEach((pr, index) => {
     const priorityEmoji = getPriorityEmoji(pr.linearUrgency || 0);
-    const linearInfo = pr.linearIssueId
-      ? ` (${pr.linearIssueId} - Priority: ${pr.linearUrgency || 0})`
-      : " (No Linear Issue)";
-    const timeAgo = new Date(pr.lastCommitDate).toLocaleDateString();
-    const draftStatus = pr.isDraft ? " 📝 DRAFT" : "";
 
+    // Basic PR info
     output += `${index + 1}. ${priorityEmoji} **PR #${pr.number}**: ${
       pr.title
-    }${linearInfo}${draftStatus}\n`;
-    output += `   - **Branch**: \`${pr.branch}\`\n`;
-    output += `   - **Last Commit**: ${pr.lastCommitAuthor} on ${timeAgo}\n`;
-    output += `   - **Copilot Reviewed**: ${
-      pr.copilotReviewed ? "✅ Yes" : "❌ No"
-    }\n`;
-    output += `   - **Commits After Review**: ${pr.commitsAfterCopilotReview}\n`;
-    output += `   - **URL**: ${pr.url}\n\n`;
+    }`;
+
+    // Linear issue link (if configured and available)
+    if (config.prManager.listFormatting.showLinearLinks && pr.linearIssueId) {
+      output += ` (${pr.linearIssueId} - Priority: ${pr.linearUrgency || 0})`;
+    } else if (!pr.linearIssueId) {
+      output += " (No Linear Issue)";
+    }
+
+    // Draft status
+    const draftStatus = pr.isDraft ? " 📝 DRAFT" : "";
+    output += `${draftStatus}\n`;
+
+    // Show detailed info if configured
+    if (config.prManager.listFormatting.showDetailedInfo) {
+      output += `   - **Branch**: \`${pr.branch}\`\n`;
+
+      // Commit info (if configured)
+      if (config.prManager.listFormatting.showCommitInfo) {
+        const timeAgo = config.prManager.listFormatting.showDates
+          ? new Date(pr.lastCommitDate).toLocaleDateString()
+          : "recently";
+        output += `   - **Last Commit**: ${pr.lastCommitAuthor} ${
+          config.prManager.listFormatting.showDates ? `on ${timeAgo}` : ""
+        }\n`;
+      }
+
+      // Copilot status (if configured)
+      if (config.prManager.listFormatting.showCopilotStatus) {
+        output += `   - **Copilot Reviewed**: ${
+          pr.copilotReviewed ? "✅ Yes" : "❌ No"
+        }\n`;
+        output += `   - **Commits After Review**: ${pr.commitsAfterCopilotReview}\n`;
+      }
+
+      output += `   - **URL**: ${pr.url}\n`;
+    }
+
+    output += `\n`;
   });
+
+  // Show truncation notice if items were limited
+  if (
+    config.prManager.listFormatting.maxItemsPerList > 0 &&
+    prs.length > limitedPRs.length
+  ) {
+    output += `_Showing ${limitedPRs.length} of ${prs.length} PRs (limited by configuration)_\n\n`;
+  }
 
   return output;
 }
@@ -403,6 +500,14 @@ async function runJulesForPR(prNumber: number): Promise<void> {
 async function interactivePRReview(prs: PRInfo[]): Promise<void> {
   if (prs.length === 0) return;
 
+  // Skip interactive mode if disabled in config
+  if (!config.workflow.enableInteractivePrompts) {
+    logInfo(
+      "Interactive prompts disabled in configuration. Skipping interactive review."
+    );
+    return;
+  }
+
   logInfo(`\n🔄 Interactive PR Review Mode`);
   logInfo(`Found ${prs.length} PR(s) that need Jules' attention.`);
 
@@ -420,24 +525,26 @@ async function interactivePRReview(prs: PRInfo[]): Promise<void> {
     const pr = prs[i];
     const priorityEmoji = getPriorityEmoji(pr.linearUrgency || 0);
 
-    console.log(`\n${"=".repeat(60)}`);
+    console.log(`\n${getCustomSeparator()}`);
     logInfo(`📋 PR ${i + 1}/${prs.length}: ${priorityEmoji} #${pr.number}`);
     logInfo(`Title: ${pr.title}`);
     logInfo(`Branch: ${pr.branch}`);
     logInfo(`Linear: ${pr.linearIssueId || "None"}`);
     logInfo(`URL: ${pr.url}`);
-    console.log(`${"=".repeat(60)}`);
+    console.log(`${getCustomSeparator()}`);
 
     const action = await promptUser(
       "\nActions: (j)ules mode, (s)kip, (q)uit",
-      "j"
+      config.prManager.interactive.defaultAction
     );
 
     switch (action.toLowerCase()) {
       case "j":
       case "jules":
         await runJulesForPR(pr.number);
-        await promptUser("\nPress Enter to continue to next PR", "");
+        if (!config.prManager.interactive.autoContinue) {
+          await promptUser("\nPress Enter to continue to next PR", "");
+        }
         break;
       case "s":
       case "skip":
@@ -458,17 +565,27 @@ async function interactivePRReview(prs: PRInfo[]): Promise<void> {
 
 async function copyToClipboardWithDebug(content: string): Promise<void> {
   try {
-    // Output what we're trying to copy to help debug clipboard issues
-    console.log("\n" + "=".repeat(80));
-    console.log("📋 CONTENT BEING COPIED TO CLIPBOARD:");
-    console.log("=".repeat(80));
-    console.log(content);
-    console.log("=".repeat(80));
+    // Only show clipboard content if enabled in config
+    if (config.clipboard.showClipboardContent) {
+      console.log("\n" + getCustomSeparator());
+      console.log("📋 CONTENT BEING COPIED TO CLIPBOARD:");
+      console.log(getCustomSeparator());
+      console.log(content);
+      console.log(getCustomSeparator());
+    }
 
-    clipboardy.writeSync(content);
-    logSuccess("✅ Content copied to clipboard!");
+    if (config.clipboard.enabled) {
+      clipboardy.writeSync(content);
+      logSuccess("✅ Content copied to clipboard!");
+    } else {
+      logInfo("📋 Clipboard operations disabled. Content shown above.");
+    }
   } catch (error) {
-    logWarning("Could not copy to clipboard, but content is shown above");
+    if (config.clipboard.fallbackToConsole) {
+      logWarning("Could not copy to clipboard, but content is shown above");
+    } else {
+      throw error;
+    }
   }
 }
 
@@ -549,7 +666,10 @@ async function findLinearIssuesWithoutPRs(): Promise<LinearIssueInfo[]> {
     logInfo(
       "🔍 Finding Linear issues without PRs (excluding Human tagged issues)..."
     );
-    logInfo("⏳ This may take a while...");
+
+    if (config.display.showProcessingTime) {
+      logInfo("⏳ This may take a while...");
+    }
 
     // Get all issues that are not done and don't have human label
     const issues = await linear.issues({
@@ -561,6 +681,7 @@ async function findLinearIssuesWithoutPRs(): Promise<LinearIssueInfo[]> {
     });
 
     const issuesWithoutPRs: LinearIssueInfo[] = [];
+    const botUsers = getBotUsers();
 
     for (const issue of issues.nodes) {
       try {
@@ -572,6 +693,21 @@ async function findLinearIssuesWithoutPRs(): Promise<LinearIssueInfo[]> {
 
         // Skip if has human label
         if (hasHumanLabel) continue;
+
+        // Check if assignee is a bot (if configured to filter bots)
+        if (config.filtering.enableDeduplication) {
+          const assignee = await issue.assignee;
+          if (
+            assignee &&
+            botUsers.some(
+              (bot) =>
+                assignee.name.toLowerCase().includes(bot.toLowerCase()) ||
+                assignee.email?.toLowerCase().includes(bot.toLowerCase())
+            )
+          ) {
+            continue;
+          }
+        }
 
         // Check if there's a branch or PR attachment
         const attachments = await issue.attachments();
@@ -637,23 +773,46 @@ function formatLinearIssueList(
   issues: LinearIssueInfo[],
   title: string
 ): string {
-  if (issues.length === 0) {
-    return `## ${title}\n\n✅ No Linear issues found matching criteria.\n\n`;
+  // Apply max items limit if configured
+  const limitedIssues =
+    config.prManager.listFormatting.maxItemsPerList > 0
+      ? issues.slice(0, config.prManager.listFormatting.maxItemsPerList)
+      : issues;
+
+  if (limitedIssues.length === 0) {
+    if (shouldShowEmptySections()) {
+      return `## ${title}\n\n✅ No Linear issues found matching criteria.\n\n`;
+    }
+    return "";
   }
 
   let output = `## ${title}\n\n`;
 
-  issues.forEach((issue, index) => {
+  limitedIssues.forEach((issue, index) => {
     const priorityEmoji = getPriorityEmoji(issue.priority || 0);
 
     output += `${index + 1}. ${priorityEmoji} **${issue.id}**: ${
       issue.title
     }\n`;
-    output += `   - **Team**: ${issue.team}\n`;
-    output += `   - **State**: ${issue.state}\n`;
-    output += `   - **Priority**: ${issue.priorityLabel}\n`;
-    output += `   - **URL**: ${issue.url}\n\n`;
+
+    // Show detailed info if configured
+    if (config.prManager.listFormatting.showDetailedInfo) {
+      output += `   - **Team**: ${issue.team}\n`;
+      output += `   - **State**: ${issue.state}\n`;
+      output += `   - **Priority**: ${issue.priorityLabel}\n`;
+      output += `   - **URL**: ${issue.url}\n`;
+    }
+
+    output += `\n`;
   });
+
+  // Show truncation notice if items were limited
+  if (
+    config.prManager.listFormatting.maxItemsPerList > 0 &&
+    issues.length > limitedIssues.length
+  ) {
+    output += `_Showing ${limitedIssues.length} of ${issues.length} Linear issues (limited by configuration)_\n\n`;
+  }
 
   return output;
 }
@@ -662,6 +821,14 @@ async function interactiveLinearReview(
   issues: LinearIssueInfo[]
 ): Promise<void> {
   if (issues.length === 0) return;
+
+  // Skip interactive mode if disabled in config
+  if (!config.workflow.enableInteractivePrompts) {
+    logInfo(
+      "Interactive prompts disabled in configuration. Skipping interactive review."
+    );
+    return;
+  }
 
   logInfo(`\n🔄 Interactive Linear Issue Review Mode`);
   logInfo(
@@ -682,25 +849,27 @@ async function interactiveLinearReview(
     const issue = issues[i];
     const priorityEmoji = getPriorityEmoji(issue.priority || 0);
 
-    console.log(`\n${"=".repeat(60)}`);
+    console.log(`\n${getCustomSeparator()}`);
     logInfo(`📋 Issue ${i + 1}/${issues.length}: ${priorityEmoji} ${issue.id}`);
     logInfo(`Title: ${issue.title}`);
     logInfo(`Team: ${issue.team}`);
     logInfo(`State: ${issue.state}`);
     logInfo(`Priority: ${issue.priorityLabel}`);
     logInfo(`URL: ${issue.url}`);
-    console.log(`${"=".repeat(60)}`);
+    console.log(`${getCustomSeparator()}`);
 
     const action = await promptUser(
       "\nActions: (j)ules mode, (s)kip, (q)uit",
-      "j"
+      config.prManager.interactive.defaultAction
     );
 
     switch (action.toLowerCase()) {
       case "j":
       case "jules":
         await runJulesForLinearIssue(issue.id);
-        await promptUser("\nPress Enter to continue to next issue", "");
+        if (!config.prManager.interactive.autoContinue) {
+          await promptUser("\nPress Enter to continue to next issue", "");
+        }
         break;
       case "s":
       case "skip":
@@ -789,6 +958,19 @@ async function checkEnvironmentSetup(): Promise<void> {
   console.log("   • jules-pr summary");
   console.log("   • jules-pr list-linear-issues");
   console.log("   • jules-pr GRE-123 --jules");
+}
+
+// Helper functions using configuration
+function getBotUsers() {
+  return config.filtering.botUsers;
+}
+
+function shouldShowEmptySections() {
+  return config.filtering.includeEmptySections;
+}
+
+function getCustomSeparator() {
+  return "=".repeat(config.display.separatorWidth);
 }
 
 async function main() {

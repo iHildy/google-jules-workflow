@@ -5,14 +5,47 @@ import { join, dirname } from "path";
 import { findTsx, executeTsFile } from "./tsx-utils";
 import clipboardy from "clipboardy";
 import { createInterface } from "readline";
+import { loadConfig, isConfigFound, showConfigWarning } from "./config-loader";
 
-const logInfo = (message: string) => console.log("\x1b[36m%s\x1b[0m", message);
-const logSuccess = (message: string) =>
-  console.log("\x1b[32m%s\x1b[0m", message);
-const logError = (message: string) =>
-  console.error("\x1b[31m%s\x1b[0m", message);
-const logWarning = (message: string) =>
-  console.warn("\x1b[33m%s\x1b[0m", message);
+// Load configuration
+const config = loadConfig();
+
+// Show warning if no config file found
+if (!isConfigFound()) {
+  showConfigWarning();
+}
+
+const logInfo = (message: string) => {
+  if (config.display.enableColors) {
+    console.log("\x1b[36m%s\x1b[0m", message);
+  } else {
+    console.log(message);
+  }
+};
+
+const logSuccess = (message: string) => {
+  if (config.display.enableColors) {
+    console.log("\x1b[32m%s\x1b[0m", message);
+  } else {
+    console.log(message);
+  }
+};
+
+const logError = (message: string) => {
+  if (config.display.enableColors) {
+    console.error("\x1b[31m%s\x1b[0m", message);
+  } else {
+    console.error(message);
+  }
+};
+
+const logWarning = (message: string) => {
+  if (config.display.enableColors) {
+    console.warn("\x1b[33m%s\x1b[0m", message);
+  } else {
+    console.warn(message);
+  }
+};
 
 interface WorkflowOptions {
   auto?: boolean;
@@ -85,7 +118,10 @@ async function getCurrentBranchPR(): Promise<number | null> {
     const currentBranch = execSync("git branch --show-current", {
       encoding: "utf-8",
     }).trim();
-    logInfo(`Current branch: ${currentBranch}`);
+
+    if (config.display.showDebugInfo) {
+      logInfo(`Current branch: ${currentBranch}`);
+    }
 
     const prListOutput = execSync(
       `gh pr list --head ${currentBranch} --json number`,
@@ -116,51 +152,100 @@ async function getLinearIssueFromBranch(): Promise<string | null> {
 async function autoDetectInput(): Promise<string | null> {
   logInfo("🔍 Auto-detecting for current branch...");
 
-  // Try Linear issue first (they usually contain more context)
-  const linearIssue = await getLinearIssueFromBranch();
-  if (linearIssue) {
-    logSuccess(`✅ Found Linear issue in branch: ${linearIssue}`);
-    return linearIssue;
-  } else {
-    // Try current branch PR
+  // Check config preference for what to try first
+  const preferLinear = config.workflow.autoDetectPreference === "linear";
+
+  if (preferLinear) {
+    // Try Linear issue first (they usually contain more context)
+    const linearIssue = await getLinearIssueFromBranch();
+    if (linearIssue) {
+      logSuccess(`✅ Found Linear issue in branch: ${linearIssue}`);
+      return linearIssue;
+    }
+
+    // Fallback to PR
     const currentPR = await getCurrentBranchPR();
     if (currentPR) {
       logSuccess(`✅ Found GitHub PR for current branch: #${currentPR}`);
       return currentPR.toString();
-    } else {
-      logError("❌ No PR or Linear issue found for current branch");
-      logInfo("💡 Create a PR first with: gh pr create");
-      logInfo(
-        "💡 Or ensure your branch name contains a Linear issue ID (e.g., feature/GRE-123-description)"
-      );
-      return null;
+    }
+  } else {
+    // Try PR first
+    const currentPR = await getCurrentBranchPR();
+    if (currentPR) {
+      logSuccess(`✅ Found GitHub PR for current branch: #${currentPR}`);
+      return currentPR.toString();
+    }
+
+    // Fallback to Linear issue
+    const linearIssue = await getLinearIssueFromBranch();
+    if (linearIssue) {
+      logSuccess(`✅ Found Linear issue in branch: ${linearIssue}`);
+      return linearIssue;
     }
   }
+
+  logError("❌ No PR or Linear issue found for current branch");
+  logInfo("💡 Create a PR first with: gh pr create");
+  logInfo(
+    "💡 Or ensure your branch name contains a Linear issue ID (e.g., feature/GRE-123-description)"
+  );
+  return null;
 }
 
 async function runExtractPR(input: string, options: WorkflowOptions = {}) {
   try {
-    logInfo(`Extracting unified discussion for: ${input}`);
+    if (config.display.showProcessingTime) {
+      const startTime = Date.now();
+      logInfo(`Extracting unified discussion for: ${input}`);
 
-    let args = [input];
-    // Don't pass --jules to the extract script, we'll handle it here
-    if (options.summary) args.push("--summary");
-    // Add flag to suppress clipboard output since we'll handle it here
-    args.push("--no-clipboard-output");
+      let args = [input];
+      // Don't pass --jules to the extract script, we'll handle it here
+      if (options.summary) args.push("--summary");
+      // Add flag to suppress clipboard output since we'll handle it here
+      args.push("--no-clipboard-output");
 
-    const extractScriptPath = join(__dirname, "extract-pr-discussion.ts");
-    const output = executeTsFile(extractScriptPath, args);
+      const extractScriptPath = join(__dirname, "extract-pr-discussion.ts");
+      const output = executeTsFile(extractScriptPath, args);
 
-    if (options.save) {
-      const filename = options.save.endsWith(".md")
-        ? options.save
-        : `${options.save}.md`;
-      const filepath = join(process.cwd(), filename);
-      writeFileSync(filepath, output);
-      logSuccess(`💾 Saved to: ${filepath}`);
+      if (options.save) {
+        const format = config.workflow.defaultSaveFormat || "md";
+        const filename = options.save.endsWith(`.${format}`)
+          ? options.save
+          : `${options.save}.${format}`;
+        const filepath = join(process.cwd(), filename);
+        writeFileSync(filepath, output);
+        logSuccess(`💾 Saved to: ${filepath}`);
+      }
+
+      const endTime = Date.now();
+      if (config.display.showProcessingTime) {
+        logInfo(`⏱️  Processing took ${endTime - startTime}ms`);
+      }
+
+      return output;
+    } else {
+      logInfo(`Extracting unified discussion for: ${input}`);
+
+      let args = [input];
+      if (options.summary) args.push("--summary");
+      args.push("--no-clipboard-output");
+
+      const extractScriptPath = join(__dirname, "extract-pr-discussion.ts");
+      const output = executeTsFile(extractScriptPath, args);
+
+      if (options.save) {
+        const format = config.workflow.defaultSaveFormat || "md";
+        const filename = options.save.endsWith(`.${format}`)
+          ? options.save
+          : `${options.save}.${format}`;
+        const filepath = join(process.cwd(), filename);
+        writeFileSync(filepath, output);
+        logSuccess(`💾 Saved to: ${filepath}`);
+      }
+
+      return output;
     }
-
-    return output;
   } catch (error) {
     throw new Error(`Failed to extract discussion: ${error}`);
   }
@@ -177,10 +262,22 @@ async function julesMode(input: string, output: string): Promise<void> {
       !branchMatch[1].startsWith("**");
 
     if (hasExistingBranch) {
-      // Step 1: Copy the branch name for existing PRs
-      const branchName = branchMatch[1].trim();
-      clipboardy.writeSync(branchName);
-      logSuccess(`📋 Step 1: Branch name copied to clipboard: ${branchName}`);
+      // Step 1: Copy based on configuration
+      const firstCopy = config.julesMode.firstCopy;
+      let clipboardContent = "";
+
+      if (firstCopy === "branch_name") {
+        const branchName = branchMatch[1].trim();
+        clipboardContent = branchName;
+        clipboardy.writeSync(branchName);
+        logSuccess(`📋 Step 1: Branch name copied to clipboard: ${branchName}`);
+      } else if (firstCopy === "title") {
+        // Extract title from PR (would need additional logic)
+        const branchName = branchMatch[1].trim();
+        clipboardContent = branchName;
+        clipboardy.writeSync(branchName);
+        logSuccess(`📋 Step 1: Content copied to clipboard: ${branchName}`);
+      }
 
       // Step 2: Wait for user and then copy full discussion
       const readline = createInterface({
@@ -188,36 +285,57 @@ async function julesMode(input: string, output: string): Promise<void> {
         output: process.stdout,
       });
 
+      const promptMessage =
+        config.julesMode.prompts.firstCopyComplete ||
+        "✨ Press Enter to continue and copy the full discussion...";
+
       await new Promise<void>((resolve) => {
-        readline.question(
-          "✨ Press Enter to continue and copy the full discussion...",
-          () => {
-            readline.close();
-            resolve();
-          }
-        );
+        readline.question(promptMessage, () => {
+          readline.close();
+          resolve();
+        });
       });
 
-      clipboardy.writeSync(output.trim());
+      if (config.clipboard.enabled) {
+        clipboardy.writeSync(output.trim());
+      }
 
-      // Show clipboard content with same format as other parts of codebase
-      console.log("\n" + "=".repeat(80));
-      console.log("📋 CONTENT COPIED TO CLIPBOARD:");
-      console.log("=".repeat(80));
-      console.log(output.trim());
-      console.log("=".repeat(80));
-      logSuccess("✅ Output copied to clipboard!");
+      // Show clipboard content based on config
+      if (config.clipboard.showClipboardContent) {
+        console.log("\n" + "=".repeat(config.display.separatorWidth));
+        console.log("📋 CONTENT COPIED TO CLIPBOARD:");
+        console.log("=".repeat(config.display.separatorWidth));
+        console.log(output.trim());
+        console.log("=".repeat(config.display.separatorWidth));
+      }
+
+      const successMessage =
+        config.julesMode.prompts.secondCopyComplete ||
+        "✅ Output copied to clipboard!";
+      logSuccess(successMessage);
     } else {
-      // For Linear issues without branches, use two-step process with Linear issue ID
+      // For Linear issues without branches, use configuration for Linear-only
       const linearMatch = input.match(/([A-Z]{2,10}-\d+)/);
       if (linearMatch) {
         const linearId = linearMatch[1];
+        const firstCopy = config.julesMode.linearOnlyFirstCopy;
 
-        // Step 1: Copy the Linear issue ID first
-        clipboardy.writeSync(linearId);
-        logSuccess(
-          `📋 Step 1: Linear issue ID copied to clipboard: ${linearId}`
-        );
+        // Step 1: Copy based on configuration
+        let clipboardContent = "";
+        if (firstCopy === "linear_id") {
+          clipboardContent = linearId;
+          logSuccess(
+            `📋 Step 1: Linear issue ID copied to clipboard: ${linearId}`
+          );
+        } else if (firstCopy === "title") {
+          // Would need additional logic to extract title
+          clipboardContent = linearId;
+          logSuccess(`📋 Step 1: Content copied to clipboard: ${linearId}`);
+        }
+
+        if (config.clipboard.enabled) {
+          clipboardy.writeSync(clipboardContent);
+        }
 
         // Step 2: Wait for user and then copy full discussion
         const readline = createInterface({
@@ -225,41 +343,58 @@ async function julesMode(input: string, output: string): Promise<void> {
           output: process.stdout,
         });
 
+        const promptMessage =
+          config.julesMode.prompts.firstCopyComplete ||
+          "✨ Press Enter to continue and copy the full Linear discussion...";
+
         await new Promise<void>((resolve) => {
-          readline.question(
-            "✨ Press Enter to continue and copy the full Linear discussion...",
-            () => {
-              readline.close();
-              resolve();
-            }
-          );
+          readline.question(promptMessage, () => {
+            readline.close();
+            resolve();
+          });
         });
 
-        clipboardy.writeSync(output.trim());
+        if (config.clipboard.enabled) {
+          clipboardy.writeSync(output.trim());
+        }
 
-        // Show clipboard content with same format as other parts of codebase
-        console.log("\n" + "=".repeat(80));
-        console.log("📋 CONTENT COPIED TO CLIPBOARD:");
-        console.log("=".repeat(80));
-        console.log(output.trim());
-        console.log("=".repeat(80));
-        logSuccess("✅ Output copied to clipboard!");
+        // Show clipboard content based on config
+        if (config.clipboard.showClipboardContent) {
+          console.log("\n" + "=".repeat(config.display.separatorWidth));
+          console.log("📋 CONTENT COPIED TO CLIPBOARD:");
+          console.log("=".repeat(config.display.separatorWidth));
+          console.log(output.trim());
+          console.log("=".repeat(config.display.separatorWidth));
+        }
+
+        const successMessage =
+          config.julesMode.prompts.secondCopyComplete ||
+          "✅ Output copied to clipboard!";
+        logSuccess(successMessage);
       } else {
         // Fallback for PR numbers without branches
-        clipboardy.writeSync(output.trim());
+        if (config.clipboard.enabled) {
+          clipboardy.writeSync(output.trim());
+        }
 
-        // Show clipboard content with same format as other parts of codebase
-        console.log("\n" + "=".repeat(80));
-        console.log("📋 CONTENT COPIED TO CLIPBOARD:");
-        console.log("=".repeat(80));
-        console.log(output.trim());
-        console.log("=".repeat(80));
+        // Show clipboard content based on config
+        if (config.clipboard.showClipboardContent) {
+          console.log("\n" + "=".repeat(config.display.separatorWidth));
+          console.log("📋 CONTENT COPIED TO CLIPBOARD:");
+          console.log("=".repeat(config.display.separatorWidth));
+          console.log(output.trim());
+          console.log("=".repeat(config.display.separatorWidth));
+        }
         logSuccess("✅ Output copied to clipboard!");
       }
     }
   } catch (error) {
-    logWarning("Could not access clipboard");
-    console.log("📄 Discussion content available above");
+    if (config.clipboard.fallbackToConsole) {
+      logWarning("Could not access clipboard");
+      console.log("📄 Discussion content available above");
+    } else {
+      throw error;
+    }
   }
 }
 
@@ -372,26 +507,58 @@ USAGE:
   // Extract discussion
   const output = await runExtractPR(input, options);
 
+  // Auto-save if configured
+  if (config.workflow.autoSave.enabled) {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const type = input.match(/^\d+$/) ? "pr" : "linear";
+    const id = input;
+    const pattern = config.workflow.autoSave.fileNamePattern
+      .replace("{type}", type)
+      .replace("{id}", id)
+      .replace("{timestamp}", timestamp);
+
+    const autoSaveDir = config.workflow.autoSave.directory;
+    const autoSavePath = join(process.cwd(), autoSaveDir, `${pattern}.md`);
+
+    // Ensure directory exists
+    const fs = require("fs");
+    if (!fs.existsSync(join(process.cwd(), autoSaveDir))) {
+      fs.mkdirSync(join(process.cwd(), autoSaveDir), { recursive: true });
+    }
+
+    writeFileSync(autoSavePath, output);
+    if (config.display.showDebugInfo) {
+      logInfo(`📁 Auto-saved to: ${autoSavePath}`);
+    }
+  }
+
   // Jules mode
   if (options.jules) {
     await julesMode(input, output);
   } else {
     // Copy to clipboard and show content
     try {
-      clipboardy.writeSync(output.trim());
-      console.log("\n" + "=".repeat(80));
+      if (config.clipboard.enabled) {
+        clipboardy.writeSync(output.trim());
+      }
+
+      console.log("\n" + "=".repeat(config.display.separatorWidth));
       console.log("📋 CONTENT COPIED TO CLIPBOARD:");
-      console.log("=".repeat(80));
+      console.log("=".repeat(config.display.separatorWidth));
       console.log(output.trim());
-      console.log("=".repeat(80));
+      console.log("=".repeat(config.display.separatorWidth));
       logSuccess(`✅ Output copied to clipboard!`);
     } catch (error) {
-      console.log("\n" + "=".repeat(80));
-      console.log("📋 CONTENT (clipboard not available):");
-      console.log("=".repeat(80));
-      console.log(output.trim());
-      console.log("=".repeat(80));
-      logSuccess(`✨ Content extracted successfully!`);
+      if (config.clipboard.fallbackToConsole) {
+        console.log("\n" + "=".repeat(config.display.separatorWidth));
+        console.log("📋 CONTENT (clipboard not available):");
+        console.log("=".repeat(config.display.separatorWidth));
+        console.log(output.trim());
+        console.log("=".repeat(config.display.separatorWidth));
+        logSuccess(`✨ Content extracted successfully!`);
+      } else {
+        throw error;
+      }
     }
 
     // Suggest next actions (only if not in Jules mode)

@@ -133,6 +133,11 @@ For development or customization:
 - **`jules-pr list-linear-issues`** - Linear issues without PRs ready for development
 - **`jules-pr assign-copilot`** - Auto-assign GitHub Copilot to PRs where Jules made commits
 
+**Configuration:**
+
+- **`jules-config-init`** - Create customizable configuration file
+- **`jules-config-init --force`** - Overwrite existing configuration file
+
 ### **🛠️ Alternative Usage (npm scripts)**
 
 If you installed the package in your project, you can also use these scripts:
@@ -257,7 +262,15 @@ jules-pr list-linear-issues
    jules-pr --help
    ```
 
-4. **Recommended: Configure environment variables** (see below)
+4. **Create configuration file** (optional but recommended)
+
+   ```bash
+   jules-config-init
+   ```
+
+   This creates a `jules-workflow.config.js` file that you can customize to match your preferences.
+
+5. **Recommended: Configure environment variables** (see below)
 
 ### **Environment Configuration**
 
@@ -324,6 +337,91 @@ If you want to add these to your project's package.json scripts:
 - **Parallel Processing**: Fast data fetching from multiple APIs
 - **Error Handling**: Comprehensive logging and fallback behavior
 - **Clean Output**: Reduced noise, focused on actionable information
+
+## ⚙️ Customization
+
+Jules Workflow can be customized to match your preferences and project needs. After installation, run:
+
+```bash
+jules-config-init
+```
+
+This creates a `jules-workflow.config.js` file with extensive options. Here are some key customizations:
+
+### **Jules Mode Behavior**
+
+```javascript
+module.exports = {
+  julesMode: {
+    // What to copy first in Jules mode
+    firstCopy: "branch_name", // Options: "branch_name", "linear_id", "title"
+
+    // Custom prompts for the two-step process
+    prompts: {
+      firstCopyComplete: "✨ Press Enter to copy full discussion...",
+      secondCopyComplete: "📋 Full context copied!",
+    },
+  },
+};
+```
+
+### **Priority Keywords**
+
+Customize how comments are classified by priority:
+
+```javascript
+module.exports = {
+  priority: {
+    customKeywords: {
+      HIGH: ["deployment", "production", "security"],
+      MEDIUM: ["documentation", "testing", "refactor"],
+      LOW: ["cleanup", "style", "typo"],
+    },
+  },
+};
+```
+
+### **Output Formatting**
+
+Control what sections appear and in what order:
+
+```javascript
+module.exports = {
+  output: {
+    // Include/exclude sections
+    includeJulesRules: true,
+    includeBotFeedback: true,
+
+    // Customize section order
+    sectionOrder: [
+      "header",
+      "summaryHeader",
+      "humanReviews",
+      "actionItems",
+      "julesRules",
+    ],
+  },
+};
+```
+
+### **Workflow Preferences**
+
+```javascript
+module.exports = {
+  workflow: {
+    // Prefer Linear issues over PRs when auto-detecting
+    autoDetectPreference: "linear", // Options: "linear", "pr"
+
+    // Auto-save all extractions
+    autoSave: {
+      enabled: true,
+      directory: "./jules-extractions",
+    },
+  },
+};
+```
+
+> 💡 **Tip**: The configuration file contains extensive comments explaining every option. Edit it to match your workflow preferences.
 
 ## 🔧 Advanced Usage
 
@@ -484,6 +582,12 @@ Comments are automatically classified using intelligent keyword detection:
   chmod +x ./node_modules/@ihildy/google-jules-workflow/scripts/*.ts
   ```
 
+**Configuration warnings:**
+
+- If you see "⚠️ No configuration file found!" warnings, run `jules-config-init` to create a config file
+- This warning is informational - the tools work fine with default settings
+- Customize the generated config file to match your workflow preferences
+
 ### **Debug Mode**
 
 ```bash
@@ -501,15 +605,16 @@ jules-pr list-needing-review
 ## 🎯 Best Practices
 
 1. **Install Globally**: `npm install -g @ihildy/google-jules-workflow` for best experience
-2. **Start with Auto-Detection**: `jules-pr` works for most cases
-3. **Use Jules Mode for AI Sessions**: `jules-pr --jules` for streamlined workflows
-4. **Daily Workflow Checks**: `jules-pr summary` for status overview
-5. **Address Reviews Promptly**: `jules-pr list-needing-update` before new work
-6. **Save Important Extractions**: Use `--save` flag for complex discussions
-7. **Set Up Environment Variables**: Configure `LINEAR_API_KEY` and `GEMINI_API_KEY` for full functionality
-8. **Use Aliases**: Set up shell aliases for faster access to commands
-9. **Leverage Interactive Modes**: Use `jules-pr list-needing-update` and `jules-pr list-linear-issues` for guided workflows
-10. **Backwards Compatibility**: Existing `jules-pr-manager` workflows continue to work with `jules-pr manager`
+2. **Configure Your Workflow**: Run `jules-config-init` and customize settings to match your preferences
+3. **Start with Auto-Detection**: `jules-pr` works for most cases
+4. **Use Jules Mode for AI Sessions**: `jules-pr --jules` for streamlined workflows
+5. **Daily Workflow Checks**: `jules-pr summary` for status overview
+6. **Address Reviews Promptly**: `jules-pr list-needing-update` before new work
+7. **Save Important Extractions**: Use `--save` flag for complex discussions
+8. **Set Up Environment Variables**: Configure `LINEAR_API_KEY` and `GEMINI_API_KEY` for full functionality
+9. **Use Aliases**: Set up shell aliases for faster access to commands
+10. **Leverage Interactive Modes**: Use `jules-pr list-needing-update` and `jules-pr list-linear-issues` for guided workflows
+11. **Backwards Compatibility**: Existing `jules-pr-manager` workflows continue to work with `jules-pr manager`
 
 ## 📄 License
 
