@@ -1,0 +1,61 @@
+{
+  "name": "@ihildy/google-jules-workflow",
+  "version": "0.0.1",
+  "description": "Google Jules is a free* AI coding agent but it has some quirks that make development very slow. These are the scripts I use to speed up my workflow.",
+  "scripts": {
+    "pr": "tsx ./scripts/pr-workflow.ts",
+    "pr-jules": "tsx ./scripts/pr-workflow.ts --jules",
+    "pr-summary": "tsx ./scripts/pr-workflow.ts --summary",
+    "pr-js": "tsx ./scripts/pr-workflow.ts --jules --summary",
+    "pr-manager": "tsx ./scripts/pr-manager.ts",
+    "pr-assign-copilot": "tsx ./scripts/pr-manager.ts assign-copilot",
+    "pr-list-needing-review": "tsx ./scripts/pr-manager.ts list-needing-review",
+    "pr-list-needing-update": "tsx ./scripts/pr-manager.ts list-needing-update",
+    "pr-list-linear-issues": "tsx ./scripts/pr-manager.ts list-linear-issues",
+    "extract-pr": "tsx ./scripts/extract-pr-discussion.ts"
+  },
+  "author": "iHildy",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/iHildy/google-jules-workflow.git"
+  },
+  "keywords": [
+    "google",
+    "jules",
+    "workflow",
+    "scripts",
+    "automation",
+    "github",
+    "linear"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "packageManager": "pnpm@10.6.4",
+  "dependencies": {
+    "@google/genai": "^1.3.0",
+    "@linear/sdk": "^40.0.0",
+    "clipboardy": "^4.0.0",
+    "dotenv": "^16.5.0",
+    "tsx": "^4.19.4"
+  },
+  "bin": {
+    "pr": "./scripts/pr-workflow.ts",
+    "pr-jules": "./scripts/pr-workflow.ts",
+    "pr-summary": "./scripts/pr-workflow.ts",
+    "pr-js": "./scripts/pr-workflow.ts",
+    "pr-manager": "./scripts/pr-manager.ts",
+    "pr-assign-copilot": "./scripts/pr-manager.ts",
+    "pr-list-needing-review": "./scripts/pr-manager.ts",
+    "pr-list-needing-update": "./scripts/pr-manager.ts",
+    "pr-list-linear-issues": "./scripts/pr-manager.ts",
+    "extract-pr": "./scripts/extract-pr-discussion.ts"
+  },
+  "files": [
+    "scripts/",
+    "README.md",
+    "LICENSE"
+  ],
+  "main": "./scripts/pr-workflow.ts"
+}
