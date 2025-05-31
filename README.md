@@ -115,23 +115,26 @@ For development or customization:
 
 ## 📚 Quick Command Reference
 
-### **🔧 Global Commands (after installation)**
+### **🔧 Unified Commands (jules-pr)**
 
-- **`jules-pr`** - Auto-detect current branch and extract unified PR/issue discussion
+**Discussion Extraction:**
+
+- **`jules-pr`** - Auto-detect current branch and extract unified PR/issue discussion for providing changes to jules
 - **`jules-pr --jules`** - Jules mode: copy branch name first, then full discussion
 - **`jules-pr --summary`** - Extract with AI-powered summary and insights
 - **`jules-pr --jules --summary`** - Combined Jules mode + AI summary
 - **`jules-pr <number|ID>`** - Extract specific GitHub PR or Linear issue
 
-### **📊 PR Management Commands**
+**Workflow Management:**
 
-- **`jules-pr-manager`** - Overview of PRs needing attention in Jules/Copilot workflow
-- **`jules-pr-manager assign-copilot`** - Auto-assign GitHub Copilot to PRs where Jules made commits
-- **`jules-pr-manager list-needing-review`** - PRs where Jules committed but Copilot hasn't reviewed
-- **`jules-pr-manager list-needing-update`** - PRs where Copilot reviewed but Jules hasn't addressed feedback
-- **`jules-pr-manager list-linear-issues`** - Linear issues without PRs ready for development
+- **`jules-pr summary`** - Overview of PRs needing attention (default)
+- **`jules-pr list-needing-review`** - PRs where Jules committed but Copilot hasn't reviewed
+- **`jules-pr list-needing-update`** - PRs where Copilot reviewed but Jules hasn't addressed feedback
+- **`jules-pr list-linear-issues`** - Linear issues without PRs ready for development
+- **`jules-pr assign-copilot`** - Auto-assign GitHub Copilot to PRs where Jules made commits
 
-### **🛠️ Alternative Usage (if using npm scripts)**
+
+### **🛠️ Alternative Usage (npm scripts)**
 
 If you installed the package in your project, you can also use these scripts:
 
@@ -139,7 +142,7 @@ If you installed the package in your project, you can also use these scripts:
 - **`npm run pr-jules`** - Same as `jules-pr --jules`
 - **`npm run pr-summary`** - Same as `jules-pr --summary`
 - **`npm run pr-js`** - Same as `jules-pr --jules --summary`
-- **`npm run pr-manager`** - Same as `jules-pr-manager`
+- **`npm run pr-manager`** - Same as `jules-pr summary`
 
 ## 🚀 Optimal Workflow Guide
 
@@ -150,7 +153,7 @@ If you installed the package in your project, you can also use these scripts:
 Find issues ready for development
 
 ```bash
-jules-pr-manager list-linear-issues
+jules-pr list-linear-issues
 ```
 
 Select issue → Provide context to Jules
@@ -160,7 +163,7 @@ Select issue → Provide context to Jules
 Request Copilot review for Jules to act on later.
 
 ```bash
-jules-pr-manager assign-copilot
+jules-pr assign-copilot
 ```
 
 **Step 3: Address Review**
@@ -168,13 +171,13 @@ jules-pr-manager assign-copilot
 Get PRs that have been reviewed by Copilot but not updated by Jules, provide the output to Jules to update the branch
 
 ```bash
-jules-pr-manager list-needing-update
+jules-pr list-needing-update
 ```
 
 **Step 4: Status Check**
 
 ```bash
-jules-pr-manager # Check overall workflow status
+jules-pr summary # Check overall workflow status
 ```
 
 **Step 5: Continue or Complete**
@@ -199,8 +202,7 @@ jules-pr --jules
 
 1. Branch name sets proper context (updates branch if it is the exact same when you press "Publish Branch")
 2. Full discussion provides comprehensive feedback
-3. No need to manually navigate between platforms
-4. Automatic priority classification helps focus on critical items
+3. Automatic priority classification helps focus on critical items
 
 ### **⚡ Quick Context Switching**
 
@@ -219,11 +221,11 @@ jules-pr 123 # Extract GitHub PR + find Linear issue
 
 ```bash
 # Process all PRs needing attention
-jules-pr-manager list-needing-update
+jules-pr list-needing-update
 # Choose 'j' for each PR to run Jules mode automatically
 
 # Start multiple new features
-jules-pr-manager list-linear-issues
+jules-pr list-linear-issues
 # Choose 'j' for each issue to extract context
 ```
 
@@ -256,7 +258,7 @@ jules-pr-manager list-linear-issues
    jules-pr --help
    ```
 
-4. **Optional: Configure environment variables** (see below)
+4. **Recommended: Configure environment variables** (see below)
 
 ### **Environment Configuration**
 
@@ -286,11 +288,11 @@ If you want to add these to your project's package.json scripts:
     "pr-jules": "jules-pr --jules",
     "pr-summary": "jules-pr --summary",
     "pr-js": "jules-pr --jules --summary",
-    "pr-manager": "jules-pr-manager",
-    "pr-assign-copilot": "jules-pr-manager assign-copilot",
-    "pr-list-needing-review": "jules-pr-manager list-needing-review",
-    "pr-list-needing-update": "jules-pr-manager list-needing-update",
-    "pr-list-linear-issues": "jules-pr-manager list-linear-issues"
+    "pr-manager": "jules-pr summary",
+    "pr-assign-copilot": "jules-pr assign-copilot",
+    "pr-list-needing-review": "jules-pr list-needing-review",
+    "pr-list-needing-update": "jules-pr list-needing-update",
+    "pr-list-linear-issues": "jules-pr list-linear-issues"
   }
 }
 ```
@@ -331,16 +333,18 @@ If you want to add these to your project's package.json scripts:
 Add these to your shell profile (`.zshrc`, `.bashrc`):
 
 ```bash
-# Global commands (recommended)
+# Unified jules-pr commands (recommended)
 alias pr="jules-pr"
 alias prj="jules-pr --jules"  # Jules mode
 alias prs="jules-pr --summary"  # AI summary
 alias prjs="jules-pr --jules --summary"  # Jules + Summary
-alias prm="jules-pr-manager"  # Workflow status
+alias prm="jules-pr summary"  # Workflow status
+alias pru="jules-pr list-needing-update"  # PRs needing Jules update
+alias prl="jules-pr list-linear-issues"  # Linear issues ready for Jules
 
 # Alternative using npx (if not globally installed)
 alias pr="npx @ihildy/google-jules-workflow jules-pr"
-alias prm="npx @ihildy/google-jules-workflow jules-pr-manager"
+alias prm="npx @ihildy/google-jules-workflow jules-pr summary"
 ```
 
 ### **Integration with Other Tools**
@@ -359,9 +363,17 @@ alias prm="npx @ihildy/google-jules-workflow jules-pr-manager"
       "group": "build"
     },
     {
-      "label": "PR Manager",
+      "label": "PR Workflow Status",
       "type": "shell",
-      "command": "jules-pr-manager",
+      "command": "jules-pr",
+      "args": ["summary"],
+      "group": "build"
+    },
+    {
+      "label": "PRs Needing Update",
+      "type": "shell",
+      "command": "jules-pr",
+      "args": ["list-needing-update"],
       "group": "build"
     }
   ]
@@ -391,7 +403,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "18"
-      - run: npx @ihildy/google-jules-workflow jules-pr-manager assign-copilot
+      - run: npx @ihildy/google-jules-workflow jules-pr assign-copilot
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -482,8 +494,9 @@ jules-pr 123 --debug
 # Save output for inspection
 jules-pr 123 --save debug-output.md
 
-# Test specific components
-jules-pr-manager list-needing-review --verbose
+# Test specific workflow components
+jules-pr summary --verbose
+jules-pr list-needing-review
 ```
 
 ## 🎯 Best Practices
@@ -491,11 +504,13 @@ jules-pr-manager list-needing-review --verbose
 1. **Install Globally**: `npm install -g @ihildy/google-jules-workflow` for best experience
 2. **Start with Auto-Detection**: `jules-pr` works for most cases
 3. **Use Jules Mode for AI Sessions**: `jules-pr --jules` for streamlined workflows
-4. **Daily Workflow Checks**: `jules-pr-manager` for status overview
-5. **Address Reviews Promptly**: `jules-pr-manager list-needing-update` before new work
+4. **Daily Workflow Checks**: `jules-pr summary` for status overview
+5. **Address Reviews Promptly**: `jules-pr list-needing-update` before new work
 6. **Save Important Extractions**: Use `--save` flag for complex discussions
 7. **Set Up Environment Variables**: Configure `LINEAR_API_KEY` and `GEMINI_API_KEY` for full functionality
 8. **Use Aliases**: Set up shell aliases for faster access to commands
+9. **Leverage Interactive Modes**: Use `jules-pr list-needing-update` and `jules-pr list-linear-issues` for guided workflows
+10. **Backwards Compatibility**: Existing `jules-pr-manager` workflows continue to work with `jules-pr manager`
 
 ## 📄 License
 

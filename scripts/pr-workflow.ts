@@ -30,6 +30,53 @@ function normalizeArgs(args: string[]): string[] {
   return args;
 }
 
+// Manager commands that should be delegated to pr-manager.ts
+const MANAGER_COMMANDS = [
+  "list-needing-review",
+  "list-needing-update",
+  "list-linear-issues",
+  "assign-copilot",
+  "manager",
+  "summary",
+];
+
+// Check if this should be delegated to pr-manager
+function shouldDelegateToManager(args: string[]): boolean {
+  return args.some((arg) => MANAGER_COMMANDS.includes(arg));
+}
+
+// Delegate to pr-manager.ts
+async function delegateToManager(args: string[]): Promise<void> {
+  try {
+    // Find the manager command and prepare arguments
+    let managerArgs = [...args];
+
+    // If 'manager' was used, remove it and use default (summary)
+    if (managerArgs.includes("manager")) {
+      managerArgs = managerArgs.filter((arg) => arg !== "manager");
+      if (managerArgs.length === 0) {
+        managerArgs = ["summary"];
+      }
+    }
+
+    // Use relative path - when called as a bin script, the current working directory
+    // should be where the user invoked the command, and we need to find pr-manager.ts
+    // relative to this script's location in node_modules or the project structure
+    const scriptDir = require("path").dirname(__filename);
+    const prManagerPath = join(scriptDir, "pr-manager.ts");
+    const command = `tsx "${prManagerPath}" ${managerArgs.join(" ")}`;
+
+    // Execute pr-manager.ts with the same stdout/stderr
+    execSync(command, {
+      stdio: "inherit",
+      cwd: process.cwd(),
+    });
+  } catch (error) {
+    // Error handling is done by pr-manager.ts, just exit with same code
+    process.exit(1);
+  }
+}
+
 async function getCurrentBranchPR(): Promise<number | null> {
   try {
     const currentBranch = execSync("git branch --show-current", {
@@ -117,50 +164,63 @@ async function runExtractPR(input: string, options: WorkflowOptions = {}) {
 async function main() {
   const args = normalizeArgs(process.argv.slice(2));
 
+  // Check if this should be delegated to pr-manager
+  if (shouldDelegateToManager(args)) {
+    await delegateToManager(args);
+    return;
+  }
+
   if (args.includes("--help") || args.includes("-h")) {
     console.log(`
-🚀 **Enhanced Unified PR/Issue Workflow Tool**
+🚀 **Jules PR - Unified Workflow Tool**
 
-COMMANDS:
-  pr-workflow [PR_NUMBER|LINEAR_ID] [options]    Extract specific PR/issue
-  pr-workflow auto                               Auto-detect current branch
-  pr-workflow current                            Same as auto
-  pr-workflow --help                             Show this help
+USAGE:
+  jules-pr [PR_NUMBER|LINEAR_ID] [options]       Extract PR/issue discussion
+  jules-pr <manager_command> [options]           PR workflow management
+  jules-pr --help                                Show this help
 
-OPTIONS:
+📋 **DISCUSSION EXTRACTION:**
+  jules-pr                             Auto-detect current branch
+  jules-pr 123                         Extract GitHub PR #123
+  jules-pr GRE-456                     Extract Linear issue GRE-456
+  jules-pr auto --jules                Auto-detect with Jules mode
+  jules-pr 123 --summary --save        Extract with AI summary and save
+
+🤖 **WORKFLOW MANAGEMENT:**
+  jules-pr summary                     Show overview of PRs needing attention (default)
+  jules-pr list-needing-review         PRs where Jules committed, need Copilot review
+  jules-pr list-needing-update         PRs reviewed by Copilot, need Jules update
+  jules-pr list-linear-issues          Linear issues ready for Jules to start
+  jules-pr assign-copilot              Auto-assign Copilot to Jules PRs
+  jules-pr manager                     Same as 'summary' (backwards compatibility)
+
+📝 **OPTIONS:**
   --save <filename>     Save output to file (e.g., --save review.md)
   --jules, -j          Jules mode: Two-step clipboard copying
   --summary, -s        Generate AI summary using Gemini
+  --help, -h           Show this help
 
-SHORTCUTS:
-  pr-workflow           Auto-detect current branch (same as 'auto')
-  pr-workflow .         Auto-detect current branch  
-
-EXAMPLES:
-  pr-workflow                          # Auto-detect current branch
-  pr-workflow 123                      # Extract PR 123 + find Linear issue
-  pr-workflow GRE-456                  # Extract Linear issue + find GitHub PR
-  pr-workflow auto --jules             # Auto-detect with Jules mode
-  pr-workflow 123 --summary --save     # Extract with AI summary and save
-
-JULES MODE:
+🎯 **JULES MODE:**
   1. First copies branch name to clipboard
-  2. Wait for Enter key press
+  2. Wait for Enter key press  
   3. Then copies full discussion
 
-AI SUMMARY:
+🤖 **AI SUMMARY:**
   - Uses Gemini AI to analyze discussion
   - Requires GEMINI_API_KEY environment variable
   - Provides actionable insights and next steps
 
-AUTOMATION IDEAS:
-  # Add to your git hooks
-  echo "npm run pr-workflow auto" >> .git/hooks/post-checkout
-  
-  # Quick aliases for your shell
-  alias pr="npm run pr-workflow"
-  alias prj="npm run pr-workflow --jules"
-  alias prs="npm run pr-workflow --summary"
+🔧 **EXAMPLES:**
+  jules-pr                             # Auto-detect current branch
+  jules-pr --jules                     # Jules mode for current branch
+  jules-pr summary                     # Show workflow overview
+  jules-pr list-needing-update         # Interactive PR review mode
+  jules-pr assign-copilot              # Assign Copilot to Jules PRs
+
+💡 **BACKWARDS COMPATIBILITY:**
+  All old commands still work:
+  - jules-pr-manager → jules-pr manager
+  - jules-pr-manager list-needing-review → jules-pr list-needing-review
     `);
     process.exit(0);
   }
@@ -231,9 +291,10 @@ AUTOMATION IDEAS:
    4. Run: git push
    
 🔧 **PRO TIPS:**
-   • Use --jules mode for streamlined workflow: npm run pr ${input} --jules
-   • Generate AI insights: npm run pr ${input} --summary
-   • Save for later: npm run pr ${input} --save review
+   • Use Jules mode: jules-pr ${input} --jules
+   • Generate AI insights: jules-pr ${input} --summary
+   • Save for later: jules-pr ${input} --save review
+   • Check workflow: jules-pr summary
   `);
   }
 }

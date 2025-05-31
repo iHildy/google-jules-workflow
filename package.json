@@ -1,6 +1,6 @@
 {
   "name": "@ihildy/google-jules-workflow",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "description": "A comprehensive toolkit for optimizing AI-powered development workflows, specifically designed for Google Jules AI coding agent integration with GitHub and Linear.",
   "keywords": [
     "ai",
@@ -29,9 +29,7 @@
   },
   "main": "./scripts/pr-workflow.ts",
   "bin": {
-    "jules-pr": "scripts/pr-workflow.ts",
-    "jules-pr-manager": "scripts/pr-manager.ts",
-    "jules-extract-pr": "scripts/extract-pr-discussion.ts"
+    "jules-pr": "scripts/pr-workflow.ts"
   },
   "files": [
     "scripts/",
