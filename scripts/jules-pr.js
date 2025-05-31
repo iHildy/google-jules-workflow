@@ -1,0 +1,62 @@
+#!/usr/bin/env node
+
+const { execSync } = require('child_process');
+const path = require('path');
+const fs = require('fs');
+
+// Find the script directory (where this wrapper is located)
+const scriptDir = __dirname;
+
+// Path to the TypeScript file we want to execute
+const tsFile = path.join(scriptDir, 'pr-workflow.ts');
+
+// Try to find tsx in different locations
+function findTsx() {
+  const possiblePaths = [
+    // When installed as a global package
+    path.join(scriptDir, '..', 'node_modules', '.bin', 'tsx'),
+    // When running from local development
+    path.join(scriptDir, '..', 'node_modules', '.bin', 'tsx'),
+    // Fallback to global tsx
+    'tsx'
+  ];
+
+  for (const tsxPath of possiblePaths) {
+    try {
+      if (tsxPath === 'tsx') {
+        // Try global tsx
+        execSync('which tsx', { stdio: 'ignore' });
+        return 'tsx';
+      } else {
+        // Check if file exists
+        if (fs.existsSync(tsxPath)) {
+          return tsxPath;
+        }
+      }
+    } catch (error) {
+      // Continue to next option
+    }
+  }
+
+  throw new Error('tsx not found. Please install tsx globally: npm install -g tsx');
+}
+
+// Execute the TypeScript file with tsx, passing through all arguments
+const args = process.argv.slice(2);
+
+try {
+  const tsxPath = findTsx();
+  const command = `"${tsxPath}" "${tsFile}" ${args.join(' ')}`;
+
+  execSync(command, {
+    stdio: 'inherit',
+    cwd: process.cwd()
+  });
+} catch (error) {
+  if (error.message.includes('tsx not found')) {
+    console.error('\n❌ Error: tsx not found');
+    console.error('Please install tsx globally: npm install -g tsx');
+    console.error('Or ensure @ihildy/google-jules-workflow is properly installed with its dependencies.\n');
+  }
+  process.exit(error.status || 1);
+} 

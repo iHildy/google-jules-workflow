@@ -1,6 +1,6 @@
 {
   "name": "@ihildy/google-jules-workflow",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A comprehensive toolkit for optimizing AI-powered development workflows, specifically designed for Google Jules AI coding agent integration with GitHub and Linear.",
   "keywords": [
     "ai",
@@ -29,7 +29,7 @@
   },
   "main": "./scripts/pr-workflow.ts",
   "bin": {
-    "jules-pr": "scripts/pr-workflow.ts"
+    "jules-pr": "scripts/jules-pr.js"
   },
   "files": [
     "scripts/",
@@ -47,7 +47,7 @@
     "pr-list-needing-update": "tsx ./scripts/pr-manager.ts list-needing-update",
     "pr-list-linear-issues": "tsx ./scripts/pr-manager.ts list-linear-issues",
     "extract-pr": "tsx ./scripts/extract-pr-discussion.ts",
-    "postinstall": "echo '\n🎉 Google Jules Workflow installed successfully!\n\nQuick start: npx jules-pr --help\nFor setup guide: https://github.com/iHildy/google-jules-workflow#setup-guide\n'"
+    "postinstall": "echo '\n🎉 Google Jules Workflow installed successfully!\n\nQuick start: jules-pr --help\nFor setup guide: https://github.com/iHildy/google-jules-workflow#setup-guide\n'"
   },
   "dependencies": {
     "@google/genai": "^1.3.0",

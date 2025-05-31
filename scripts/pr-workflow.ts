@@ -59,12 +59,42 @@ async function delegateToManager(args: string[]): Promise<void> {
       }
     }
 
-    // Use relative path - when called as a bin script, the current working directory
-    // should be where the user invoked the command, and we need to find pr-manager.ts
-    // relative to this script's location in node_modules or the project structure
+    // Find tsx binary
+    const fs = require("fs");
+    function findTsx() {
+      const possiblePaths = [
+        // When running from global installation
+        join(__dirname, "..", "node_modules", ".bin", "tsx"),
+        // When running from local development
+        join(__dirname, "..", "node_modules", ".bin", "tsx"),
+        // Fallback to global tsx
+        "tsx",
+      ];
+
+      for (const tsxPath of possiblePaths) {
+        try {
+          if (tsxPath === "tsx") {
+            // Try global tsx
+            execSync("which tsx", { stdio: "ignore" });
+            return "tsx";
+          } else {
+            // Check if file exists
+            if (fs.existsSync(tsxPath)) {
+              return tsxPath;
+            }
+          }
+        } catch (error) {
+          // Continue to next option
+        }
+      }
+
+      throw new Error("tsx not found");
+    }
+
+    const tsxPath = findTsx();
     const scriptDir = require("path").dirname(__filename);
     const prManagerPath = join(scriptDir, "pr-manager.ts");
-    const command = `tsx "${prManagerPath}" ${managerArgs.join(" ")}`;
+    const command = `"${tsxPath}" "${prManagerPath}" ${managerArgs.join(" ")}`;
 
     // Execute pr-manager.ts with the same stdout/stderr
     execSync(command, {
