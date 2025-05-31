@@ -133,7 +133,6 @@ For development or customization:
 - **`jules-pr list-linear-issues`** - Linear issues without PRs ready for development
 - **`jules-pr assign-copilot`** - Auto-assign GitHub Copilot to PRs where Jules made commits
 
-
 ### **🛠️ Alternative Usage (npm scripts)**
 
 If you installed the package in your project, you can also use these scripts:

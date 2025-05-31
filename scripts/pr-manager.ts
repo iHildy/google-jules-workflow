@@ -378,10 +378,23 @@ async function runJulesForPR(prNumber: number): Promise<void> {
     const prWorkflowPath = join(__dirname, "pr-workflow.ts");
     const args = [prNumber.toString(), "--jules"];
 
-    // Execute and let it handle its own output/clipboard
-    executeTsFile(prWorkflowPath, args);
+    try {
+      // Execute and capture output
+      const output = executeTsFile(prWorkflowPath, args);
 
-    logSuccess("📋 Full PR discussion extracted and copied to clipboard!");
+      // If we get here without error, the extraction succeeded
+      // The pr-workflow.ts script handles its own success messaging and clipboard operations
+    } catch (extractError) {
+      logError(`Extraction failed for PR #${prNumber}:`);
+      console.error(extractError);
+
+      // Try to provide helpful guidance
+      logInfo("💡 This might be due to:");
+      logInfo("   • Missing GitHub PR or Linear issue");
+      logInfo("   • Network connectivity issues");
+      logInfo("   • Missing environment variables (LINEAR_API_KEY)");
+      logInfo("   • Invalid PR number or permissions");
+    }
   } catch (error) {
     logError(`Failed to run extraction for PR #${prNumber}: ${error}`);
   }
@@ -461,18 +474,63 @@ async function copyToClipboardWithDebug(content: string): Promise<void> {
 
 async function runJulesForLinearIssue(issueId: string): Promise<void> {
   try {
+    // Check for required environment variables first
+    if (!process.env.LINEAR_API_KEY) {
+      logError(`❌ Missing LINEAR_API_KEY environment variable`);
+      logInfo("💡 To fix this:");
+      logInfo(
+        "   1. Get your Linear API key from: https://linear.app/settings/api"
+      );
+      logInfo("   2. Add it to your environment:");
+      logInfo("      export LINEAR_API_KEY='your_api_key_here'");
+      logInfo("   3. Or create a .env file in your project with:");
+      logInfo("      LINEAR_API_KEY=your_api_key_here");
+      return;
+    }
+
     logInfo(`🤖 Running Jules extraction for Linear issue ${issueId}...`);
 
     // Use the shared utility to execute pr-workflow.ts
     const prWorkflowPath = join(__dirname, "pr-workflow.ts");
     const args = [issueId, "--jules"];
 
-    // Execute and let it handle its own output/clipboard
-    executeTsFile(prWorkflowPath, args);
+    try {
+      // Execute and capture output
+      const output = executeTsFile(prWorkflowPath, args);
 
-    logSuccess(
-      "📋 Full Linear issue discussion extracted and copied to clipboard!"
-    );
+      // If we get here without error, the extraction succeeded
+      // The pr-workflow.ts script handles its own success messaging and clipboard operations
+    } catch (extractError) {
+      logError(`Extraction failed for Linear issue ${issueId}:`);
+
+      // Parse common error messages and provide helpful guidance
+      const errorMessage = extractError.toString();
+
+      if (errorMessage.includes("LINEAR_API_KEY not found")) {
+        logInfo("💡 LINEAR_API_KEY is missing or invalid");
+        logInfo("   • Check your environment variables");
+        logInfo("   • Verify the API key is correct");
+        logInfo("   • Get a new key from: https://linear.app/settings/api");
+      } else if (errorMessage.includes("Could not find data")) {
+        logInfo(`💡 Linear issue ${issueId} not found or inaccessible`);
+        logInfo("   • Verify the Linear issue ID is correct");
+        logInfo("   • Check you have access to this Linear workspace");
+        logInfo("   • Ensure the issue exists and isn't archived");
+      } else if (
+        errorMessage.includes("Network") ||
+        errorMessage.includes("timeout")
+      ) {
+        logInfo("💡 Network connectivity issue");
+        logInfo("   • Check your internet connection");
+        logInfo("   • Linear API might be temporarily unavailable");
+      } else {
+        // Show the actual error for debugging
+        console.error("Raw error:", extractError);
+        logInfo("💡 Unexpected error occurred");
+        logInfo("   • Try running the command again");
+        logInfo("   • Check the error details above");
+      }
+    }
   } catch (error) {
     logError(`Failed to run extraction for Linear issue ${issueId}: ${error}`);
   }
@@ -491,6 +549,7 @@ async function findLinearIssuesWithoutPRs(): Promise<LinearIssueInfo[]> {
     logInfo(
       "🔍 Finding Linear issues without PRs (excluding Human tagged issues)..."
     );
+    logInfo("⏳ This may take a while...");
 
     // Get all issues that are not done and don't have human label
     const issues = await linear.issues({
@@ -660,6 +719,78 @@ async function interactiveLinearReview(
   logSuccess("🎉 Completed interactive Linear issue review!");
 }
 
+async function checkEnvironmentSetup(): Promise<void> {
+  console.log("🔍 **Environment Setup Check**\n");
+
+  // Check GitHub CLI
+  try {
+    execSync("gh --version", { stdio: "ignore" });
+    logSuccess("✅ GitHub CLI (gh) is installed and available");
+  } catch {
+    logError("❌ GitHub CLI (gh) is not installed or not in PATH");
+    logInfo("   Install from: https://cli.github.com/");
+  }
+
+  // Check GitHub authentication
+  try {
+    execSync("gh auth status", { stdio: "ignore" });
+    logSuccess("✅ GitHub CLI is authenticated");
+  } catch {
+    logError("❌ GitHub CLI is not authenticated");
+    logInfo("   Run: gh auth login");
+  }
+
+  // Check Linear API key
+  if (process.env.LINEAR_API_KEY) {
+    logSuccess("✅ LINEAR_API_KEY environment variable is set");
+
+    // Test Linear API access
+    try {
+      const linear = new LinearClient({ apiKey: process.env.LINEAR_API_KEY });
+      await linear.viewer;
+      logSuccess("✅ Linear API key is valid and accessible");
+    } catch (error) {
+      logError("❌ Linear API key is invalid or inaccessible");
+      logInfo("   • Check your API key is correct");
+      logInfo("   • Get a new key from: https://linear.app/settings/api");
+    }
+  } else {
+    logError("❌ LINEAR_API_KEY environment variable is not set");
+    logInfo("   1. Get your API key from: https://linear.app/settings/api");
+    logInfo("   2. Add to environment: export LINEAR_API_KEY='your_key'");
+    logInfo("   3. Or create .env file with: LINEAR_API_KEY=your_key");
+  }
+
+  // Check Gemini API key (optional)
+  if (process.env.GEMINI_API_KEY) {
+    logSuccess(
+      "✅ GEMINI_API_KEY environment variable is set (for AI summaries)"
+    );
+  } else {
+    logWarning("⚠️  GEMINI_API_KEY not set (AI summaries won't work)");
+    logInfo("   This is optional - only needed for --summary flag");
+  }
+
+  // Check git repository
+  try {
+    await getCurrentRepoInfo();
+    logSuccess(
+      "✅ Current directory is a valid git repository with GitHub remote"
+    );
+  } catch (error) {
+    logError(
+      "❌ Current directory is not a valid git repository or missing GitHub remote"
+    );
+    logInfo("   • Make sure you're in a git repository");
+    logInfo("   • Ensure the repository has a GitHub remote origin");
+  }
+
+  console.log("\n💡 **Usage**: If all checks pass, you can run commands like:");
+  console.log("   • jules-pr summary");
+  console.log("   • jules-pr list-linear-issues");
+  console.log("   • jules-pr GRE-123 --jules");
+}
+
 async function main() {
   try {
     const args = normalizeArgs(process.argv.slice(2));
@@ -676,6 +807,7 @@ COMMANDS:
   list-needing-update     List PRs where copilot reviewed but no commits since (with interactive mode)
   list-linear-issues      List Linear issues without PRs that are ready for Jules to start (with interactive mode)
   assign-copilot         Assign copilot to review PRs where Jules committed
+  check-env              Check environment setup (GitHub CLI, Linear API, etc.)
   summary                Show summary of both categories
 
 OPTIONS:
@@ -686,6 +818,7 @@ EXAMPLES:
   npm run pr-manager list-needing-update
   npm run pr-manager list-linear-issues
   npm run pr-manager assign-copilot
+  npm run pr-manager check-env
   npm run pr-manager summary
 
 INTERACTIVE MODE:
@@ -750,6 +883,12 @@ REQUIREMENTS:
 
       case "assign-copilot": {
         await assignCopilotToJulesPRs();
+        closeReadlineInterface();
+        break;
+      }
+
+      case "check-env": {
+        await checkEnvironmentSetup();
         closeReadlineInterface();
         break;
       }

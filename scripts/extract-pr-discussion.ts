@@ -9,13 +9,21 @@ import { createInterface } from "readline";
 // Load environment variables from .env file
 dotenv.config();
 
-const logInfo = (message: string) => console.log("\x1b[36m%s\x1b[0m", message); // Cyan
-const logSuccess = (message: string) =>
-  console.log("\x1b[32m%s\x1b[0m", message); // Green
-const logError = (message: string) =>
-  console.error("\x1b[31m%s\x1b[0m", message); // Red
-const logWarning = (message: string) =>
-  console.warn("\x1b[33m%s\x1b[0m", message); // Yellow
+// Global flag to control logging output
+let suppressLogs = false;
+
+const logInfo = (message: string) => {
+  if (!suppressLogs) console.log("\x1b[36m%s\x1b[0m", message);
+}; // Cyan
+const logSuccess = (message: string) => {
+  if (!suppressLogs) console.log("\x1b[32m%s\x1b[0m", message);
+}; // Green
+const logError = (message: string) => {
+  if (!suppressLogs) console.error("\x1b[31m%s\x1b[0m", message);
+}; // Red
+const logWarning = (message: string) => {
+  if (!suppressLogs) console.warn("\x1b[33m%s\x1b[0m", message);
+}; // Yellow
 
 // Handle both npm script usage and direct CLI usage
 function normalizeArgs(args: string[]): string[] {
@@ -54,6 +62,16 @@ interface LinearIssueInfo {
     title?: string;
   }>;
   branchName?: string;
+  url: string;
+  state: string;
+  priority: number;
+  priorityLabel: string;
+  assignee: {
+    name: string;
+    email: string;
+  } | null;
+  team: string;
+  labels: string[];
 }
 
 interface Comment {
@@ -173,6 +191,7 @@ async function getCurrentRepoInfo(): Promise<{ owner: string; repo: string }> {
 
 async function promptUser(question: string): Promise<string> {
   const readline = createReadlineInterface();
+
   return new Promise((resolve) => {
     readline.question(question, (answer: string) => {
       resolve(answer.trim());
@@ -206,11 +225,29 @@ async function fetchLinearIssue(
     const comments = await issue.comments();
     const commentsList = await comments.nodes;
 
+    // Get additional metadata
+    const state = await issue.state;
+    const assignee = await issue.assignee;
+    const team = await issue.team;
+    const labels = await issue.labels();
+
     const linearInfo: LinearIssueInfo = {
       id: issueId,
       title: issue.title,
       description: issue.description,
       branchName: issue.branchName,
+      url: issue.url,
+      state: state?.name || "Unknown",
+      priority: issue.priority || 0,
+      priorityLabel: issue.priorityLabel || "None",
+      assignee: assignee
+        ? {
+            name: assignee.displayName || assignee.name || "Unknown User",
+            email: assignee.email,
+          }
+        : null,
+      team: team?.name || "Unknown",
+      labels: labels.nodes.map((label) => label.name),
       comments: commentsList.map((comment) => ({
         body: comment.body,
         user: {
@@ -448,7 +485,42 @@ function formatOutput(extractedData: ExtractedData): string {
 
   let output = "";
 
-  // Get the full branch name (including prefix like "feature/")
+  // For Linear-only issues (no PR found), use simplified format
+  if (linearInfo && !prInfo) {
+    // Use the Linear issue title as the main title
+    output += `# ${linearInfo.title}\n\n`;
+
+    // Add description if available
+    if (linearInfo.description) {
+      output += `${linearInfo.description}\n\n`;
+    }
+
+    // Add metadata section
+    output += `## Metadata\n`;
+    output += `- URL: [${linearInfo.url}](${linearInfo.url})\n`;
+    output += `- Identifier: ${linearInfo.id}\n`;
+    output += `- Status: ${linearInfo.state}\n`;
+    if (linearInfo.assignee) {
+      output += `- Assignee: ${linearInfo.assignee.name}\n`;
+    }
+    if (linearInfo.labels && linearInfo.labels.length > 0) {
+      output += `- Labels: ${linearInfo.labels.join(", ")}\n`;
+    }
+    output += `- Priority: ${linearInfo.priorityLabel}\n`;
+    output += `- Team: ${linearInfo.team}\n\n`;
+
+    // Add comments section if there are any
+    if (linearInfo.comments && linearInfo.comments.length > 0) {
+      output += `## Comments\n\n`;
+      linearInfo.comments.forEach((comment) => {
+        output += `- ${comment.user.name}:\n\n  ${comment.body}\n\n`;
+      });
+    }
+
+    return output;
+  }
+
+  // For PR + Linear combined format (existing logic)
   const fullBranchName =
     prDetails?.head_ref || linearInfo?.branchName || "unknown";
 
@@ -729,27 +801,30 @@ async function processInput(input: string): Promise<ExtractedData> {
           extractedData.issueComments = prData.issueComments;
         }
       } else {
-        // Prompt for GitHub PR number
-        logInfo("\n📎 No GitHub PR found attached to this Linear issue.");
-        const prNumber = await promptUser(
-          "🤔 Enter GitHub PR number (or press Enter to skip): "
-        );
-        if (prNumber) {
-          try {
-            const { owner, repo } = await getCurrentRepoInfo();
-            const prInfo = { owner, repo, number: parseInt(prNumber) };
-            const prData = await fetchPRData(prInfo);
-            if (prData) {
-              extractedData.prInfo = prInfo;
-              extractedData.prDetails = prData.prDetails;
-              extractedData.reviews = prData.reviews;
-              extractedData.reviewComments = prData.reviewComments;
-              extractedData.issueComments = prData.issueComments;
+        // Only prompt for GitHub PR number if not running in no-clipboard-output mode
+        if (!suppressLogs) {
+          logInfo("\n📎 No GitHub PR found attached to this Linear issue.");
+          const prNumber = await promptUser(
+            "🤔 Enter GitHub PR number (or press Enter to skip): "
+          );
+          if (prNumber) {
+            try {
+              const { owner, repo } = await getCurrentRepoInfo();
+              const prInfo = { owner, repo, number: parseInt(prNumber) };
+              const prData = await fetchPRData(prInfo);
+              if (prData) {
+                extractedData.prInfo = prInfo;
+                extractedData.prDetails = prData.prDetails;
+                extractedData.reviews = prData.reviews;
+                extractedData.reviewComments = prData.reviewComments;
+                extractedData.issueComments = prData.issueComments;
+              }
+            } catch (error) {
+              logWarning(`Could not fetch PR ${prNumber}`);
             }
-          } catch (error) {
-            logWarning(`Could not fetch PR ${prNumber}`);
           }
         }
+        // When suppressLogs is true (--no-clipboard-output), just continue with Linear-only data
       }
     }
   } else {
@@ -781,8 +856,8 @@ async function processInput(input: string): Promise<ExtractedData> {
           }
         }
 
-        if (!extractedData.linearInfo) {
-          // Prompt for Linear issue ID
+        if (!extractedData.linearInfo && !suppressLogs) {
+          // Only prompt for Linear issue ID if not running in no-clipboard-output mode
           logInfo("\n📎 No Linear issue found for this PR branch.");
           const linearId = await promptUser(
             "🤔 Enter Linear issue ID (or press Enter to skip): "
@@ -852,9 +927,10 @@ EXAMPLES:
   npm run extract-pr GRE-456    Extract Linear issue GRE-456 (+ find GitHub PR)
 
 OPTIONS:
-  -j, --jules      Jules mode: Copy branch name first, then full discussion
-  -s, --summary    Generate AI summary using Gemini
-  --help           Show this help
+  -j, --jules               Jules mode: Copy branch name first, then full discussion
+  -s, --summary             Generate AI summary using Gemini
+  --no-clipboard-output     Suppress clipboard operations and debug output (for script usage)
+  --help                    Show this help
 
 FEATURES:
   🔗 **Unified Extraction**: Automatically finds connected Linear issues and GitHub PRs
@@ -888,6 +964,10 @@ RATE LIMITS (Gemini):
     const input = args.find((arg) => !arg.startsWith("-")) || args[0];
     const julesFlag = args.includes("-j") || args.includes("--jules");
     const summaryFlag = args.includes("-s") || args.includes("--summary");
+    const noClipboardOutput = args.includes("--no-clipboard-output");
+
+    // Set global flag to suppress logs when called by another script
+    suppressLogs = noClipboardOutput;
 
     const startTime = Date.now();
 
@@ -915,20 +995,48 @@ RATE LIMITS (Gemini):
 
     const processingTime = Date.now() - startTime;
 
-    // Output the result
-    console.log("\n" + "=".repeat(80));
-    console.log(output);
+    // Only show full output and clipboard operations if not suppressed
+    if (!noClipboardOutput) {
+      // Output the result
+      console.log("\n" + "=".repeat(80));
+      console.log(output);
 
-    if (summary) {
-      console.log("=".repeat(30) + " AI SUMMARY " + "=".repeat(30));
-      console.log(summary);
-    }
+      if (summary) {
+        console.log("=".repeat(30) + " AI SUMMARY " + "=".repeat(30));
+        console.log(summary);
+      }
 
-    console.log("=".repeat(80));
+      console.log("=".repeat(80));
 
-    // Copy to clipboard (full output + summary if available)
-    try {
-      const clipboardContent = summary
+      // Copy to clipboard (full output + summary if available)
+      try {
+        const clipboardContent = summary
+          ? output +
+            "\n\n" +
+            "=".repeat(30) +
+            " AI SUMMARY " +
+            "=".repeat(30) +
+            "\n" +
+            summary
+          : output;
+
+        // Output what we're trying to copy to help debug clipboard issues
+        console.log("\n" + "=".repeat(80));
+        console.log("📋 CONTENT BEING COPIED TO CLIPBOARD:");
+        console.log("=".repeat(80));
+        console.log(clipboardContent);
+        console.log("=".repeat(80));
+
+        clipboardy.writeSync(clipboardContent);
+        logSuccess(
+          `✅ Output copied to clipboard! (Processed in ${processingTime}ms)`
+        );
+      } catch (error) {
+        logWarning("Could not copy to clipboard, but output is shown above");
+      }
+    } else {
+      // When called by another script, just output the content for capture
+      const finalOutput = summary
         ? output +
           "\n\n" +
           "=".repeat(30) +
@@ -937,20 +1045,7 @@ RATE LIMITS (Gemini):
           "\n" +
           summary
         : output;
-
-      // Output what we're trying to copy to help debug clipboard issues
-      console.log("\n" + "=".repeat(80));
-      console.log("📋 CONTENT BEING COPIED TO CLIPBOARD:");
-      console.log("=".repeat(80));
-      console.log(clipboardContent);
-      console.log("=".repeat(80));
-
-      clipboardy.writeSync(clipboardContent);
-      logSuccess(
-        `✅ Output copied to clipboard! (Processed in ${processingTime}ms)`
-      );
-    } catch (error) {
-      logWarning("Could not copy to clipboard, but output is shown above");
+      console.log(finalOutput);
     }
 
     closeReadlineInterface();

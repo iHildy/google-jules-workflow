@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const { execSync } = require('child_process');
+const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
@@ -27,6 +27,7 @@ function findTsx() {
     try {
       if (tsxPath === 'tsx') {
         // Try global tsx
+        const { execSync } = require('child_process');
         execSync('which tsx', { stdio: 'ignore' });
         return 'tsx';
       } else {
@@ -48,17 +49,29 @@ const args = process.argv.slice(2);
 
 try {
   const tsxPath = findTsx();
-  const command = `"${tsxPath}" "${tsFile}" ${args.join(' ')}`;
 
-  execSync(command, {
+  // Use spawn instead of execSync for better TTY/readline support
+  const child = spawn(tsxPath, [tsFile, ...args], {
     stdio: 'inherit',
     cwd: process.cwd()
   });
+
+  child.on('exit', (code) => {
+    process.exit(code || 0);
+  });
+
+  child.on('error', (error) => {
+    console.error('\n❌ Error executing script:', error.message);
+    process.exit(1);
+  });
+
 } catch (error) {
   if (error.message && error.message.includes('tsx not found')) {
     console.error('\n❌ Error: tsx not found');
     console.error('Please install tsx globally: npm install -g tsx');
     console.error('Or ensure @ihildy/google-jules-workflow is properly installed with its dependencies.\n');
+  } else {
+    console.error('\n❌ Error:', error.message);
   }
-  process.exit(error.status || 1);
+  process.exit(1);
 } 

@@ -1,6 +1,6 @@
 {
   "name": "@ihildy/google-jules-workflow",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "A comprehensive toolkit for optimizing AI-powered development workflows, specifically designed for Google Jules AI coding agent integration with GitHub and Linear.",
   "keywords": [
     "ai",

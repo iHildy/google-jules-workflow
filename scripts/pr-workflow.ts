@@ -1,8 +1,10 @@
 #!/usr/bin/env tsx
 import { execSync } from "child_process";
 import { writeFileSync } from "fs";
-import { join } from "path";
+import { join, dirname } from "path";
 import { findTsx, executeTsFile } from "./tsx-utils";
+import clipboardy from "clipboardy";
+import { createInterface } from "readline";
 
 const logInfo = (message: string) => console.log("\x1b[36m%s\x1b[0m", message);
 const logSuccess = (message: string) =>
@@ -39,6 +41,7 @@ const MANAGER_COMMANDS = [
   "assign-copilot",
   "manager",
   "summary",
+  "check-env",
 ];
 
 // Check if this should be delegated to pr-manager
@@ -140,8 +143,10 @@ async function runExtractPR(input: string, options: WorkflowOptions = {}) {
     logInfo(`Extracting unified discussion for: ${input}`);
 
     let args = [input];
-    if (options.jules) args.push("--jules");
+    // Don't pass --jules to the extract script, we'll handle it here
     if (options.summary) args.push("--summary");
+    // Add flag to suppress clipboard output since we'll handle it here
+    args.push("--no-clipboard-output");
 
     const extractScriptPath = join(__dirname, "extract-pr-discussion.ts");
     const output = executeTsFile(extractScriptPath, args);
@@ -158,6 +163,81 @@ async function runExtractPR(input: string, options: WorkflowOptions = {}) {
     return output;
   } catch (error) {
     throw new Error(`Failed to extract discussion: ${error}`);
+  }
+}
+
+async function julesMode(input: string, output: string): Promise<void> {
+  try {
+    // Check if this is a Linear issue with an existing branch/PR
+    const branchMatch = output.match(/^([^\n]+)/);
+    const hasExistingBranch =
+      branchMatch &&
+      branchMatch[1] &&
+      !branchMatch[1].startsWith("#") &&
+      !branchMatch[1].startsWith("**");
+
+    if (hasExistingBranch) {
+      // Step 1: Copy the branch name for existing PRs
+      const branchName = branchMatch[1].trim();
+      clipboardy.writeSync(branchName);
+      logSuccess(`📋 Step 1: Branch name copied to clipboard: ${branchName}`);
+
+      // Step 2: Wait for user and then copy full discussion
+      const readline = createInterface({
+        input: process.stdin,
+        output: process.stdout,
+      });
+
+      await new Promise<void>((resolve) => {
+        readline.question(
+          "✨ Press Enter to continue and copy the full discussion...",
+          () => {
+            readline.close();
+            resolve();
+          }
+        );
+      });
+
+      clipboardy.writeSync(output.trim());
+
+      // Show clipboard content with same format as other parts of codebase
+      console.log("\n" + "=".repeat(80));
+      console.log("📋 CONTENT COPIED TO CLIPBOARD:");
+      console.log("=".repeat(80));
+      console.log(output.trim());
+      console.log("=".repeat(80));
+      logSuccess("✅ Output copied to clipboard!");
+    } else {
+      // For Linear issues without branches, skip two-step process and copy metadata directly
+      const linearMatch = input.match(/([A-Z]{2,10}-\d+)/);
+      if (linearMatch) {
+        logInfo(`📋 No existing branch found for ${linearMatch[1]}`);
+        logInfo("🚀 Copying Linear issue metadata directly...");
+        clipboardy.writeSync(output.trim());
+
+        // Show clipboard content with same format as other parts of codebase
+        console.log("\n" + "=".repeat(80));
+        console.log("📋 CONTENT COPIED TO CLIPBOARD:");
+        console.log("=".repeat(80));
+        console.log(output.trim());
+        console.log("=".repeat(80));
+        logSuccess("✅ Output copied to clipboard!");
+      } else {
+        // Fallback for PR numbers without branches
+        clipboardy.writeSync(output.trim());
+
+        // Show clipboard content with same format as other parts of codebase
+        console.log("\n" + "=".repeat(80));
+        console.log("📋 CONTENT COPIED TO CLIPBOARD:");
+        console.log("=".repeat(80));
+        console.log(output.trim());
+        console.log("=".repeat(80));
+        logSuccess("✅ Output copied to clipboard!");
+      }
+    }
+  } catch (error) {
+    logWarning("Could not access clipboard");
+    console.log("📄 Discussion content available above");
   }
 }
 
@@ -270,19 +350,29 @@ USAGE:
   // Extract discussion
   const output = await runExtractPR(input, options);
 
-  // Output the content that should be copied to clipboard
-  console.log("\n" + "=".repeat(80));
-  console.log("📋 CONTENT COPIED TO CLIPBOARD:");
-  console.log("=".repeat(80));
-  console.log(output);
-  console.log("=".repeat(80));
+  // Jules mode
+  if (options.jules) {
+    await julesMode(input, output);
+  } else {
+    // Copy to clipboard and show content
+    try {
+      clipboardy.writeSync(output.trim());
+      console.log("\n" + "=".repeat(80));
+      console.log("📋 CONTENT COPIED TO CLIPBOARD:");
+      console.log("=".repeat(80));
+      console.log(output.trim());
+      console.log("=".repeat(80));
+      logSuccess(`✅ Output copied to clipboard!`);
+    } catch (error) {
+      console.log("\n" + "=".repeat(80));
+      console.log("📋 CONTENT (clipboard not available):");
+      console.log("=".repeat(80));
+      console.log(output.trim());
+      console.log("=".repeat(80));
+      logSuccess(`✨ Content extracted successfully!`);
+    }
 
-  logSuccess(
-    `✨ Unified discussion extracted successfully! And copied to clipboard!`
-  );
-
-  // Suggest next actions (only if not in Jules mode)
-  if (!options.jules) {
+    // Suggest next actions (only if not in Jules mode)
     console.log(`
 💡 **NEXT STEPS:**
    1. Review the extracted feedback above
