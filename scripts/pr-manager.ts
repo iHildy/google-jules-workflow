@@ -4,6 +4,8 @@ import { LinearClient } from "@linear/sdk";
 import { createInterface } from "readline";
 import dotenv from "dotenv";
 import clipboardy from "clipboardy";
+import { join } from "path";
+import { executeTsFile } from "./tsx-utils";
 
 // Load environment variables from .env file
 dotenv.config();
@@ -371,15 +373,14 @@ async function assignCopilotToJulesPRs(): Promise<void> {
 async function runJulesForPR(prNumber: number): Promise<void> {
   try {
     logInfo(`🤖 Running Jules extraction for PR #${prNumber}...`);
-    // Run the extraction and capture output
-    const output = execSync(
-      `tsx ./scripts/pr-workflow.ts ${prNumber} --jules`,
-      {
-        encoding: "utf-8",
-      }
-    );
 
-    // The pr-workflow script should handle clipboard copying with debug output
+    // Use the shared utility to execute pr-workflow.ts
+    const prWorkflowPath = join(__dirname, "pr-workflow.ts");
+    const args = [prNumber.toString(), "--jules"];
+
+    // Execute and let it handle its own output/clipboard
+    executeTsFile(prWorkflowPath, args);
+
     logSuccess("📋 Full PR discussion extracted and copied to clipboard!");
   } catch (error) {
     logError(`Failed to run extraction for PR #${prNumber}: ${error}`);
@@ -461,12 +462,14 @@ async function copyToClipboardWithDebug(content: string): Promise<void> {
 async function runJulesForLinearIssue(issueId: string): Promise<void> {
   try {
     logInfo(`🤖 Running Jules extraction for Linear issue ${issueId}...`);
-    // Run the extraction and capture output
-    const output = execSync(`tsx ./scripts/pr-workflow.ts ${issueId} --jules`, {
-      encoding: "utf-8",
-    });
 
-    // The pr-workflow script should handle clipboard copying with debug output
+    // Use the shared utility to execute pr-workflow.ts
+    const prWorkflowPath = join(__dirname, "pr-workflow.ts");
+    const args = [issueId, "--jules"];
+
+    // Execute and let it handle its own output/clipboard
+    executeTsFile(prWorkflowPath, args);
+
     logSuccess(
       "📋 Full Linear issue discussion extracted and copied to clipboard!"
     );

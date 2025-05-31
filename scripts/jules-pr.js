@@ -10,13 +10,15 @@ const scriptDir = __dirname;
 // Path to the TypeScript file we want to execute
 const tsFile = path.join(scriptDir, 'pr-workflow.ts');
 
-// Try to find tsx in different locations
+// Try to find tsx in different locations (matches tsx-utils.ts logic)
 function findTsx() {
   const possiblePaths = [
     // When installed as a global package
     path.join(scriptDir, '..', 'node_modules', '.bin', 'tsx'),
     // When running from local development
     path.join(scriptDir, '..', 'node_modules', '.bin', 'tsx'),
+    // Check current working directory's node_modules (when used in a project)
+    path.join(process.cwd(), 'node_modules', '.bin', 'tsx'),
     // Fallback to global tsx
     'tsx'
   ];
@@ -53,7 +55,7 @@ try {
     cwd: process.cwd()
   });
 } catch (error) {
-  if (error.message.includes('tsx not found')) {
+  if (error.message && error.message.includes('tsx not found')) {
     console.error('\n❌ Error: tsx not found');
     console.error('Please install tsx globally: npm install -g tsx');
     console.error('Or ensure @ihildy/google-jules-workflow is properly installed with its dependencies.\n');

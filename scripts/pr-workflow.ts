@@ -2,6 +2,7 @@
 import { execSync } from "child_process";
 import { writeFileSync } from "fs";
 import { join } from "path";
+import { findTsx, executeTsFile } from "./tsx-utils";
 
 const logInfo = (message: string) => console.log("\x1b[36m%s\x1b[0m", message);
 const logSuccess = (message: string) =>
@@ -59,38 +60,7 @@ async function delegateToManager(args: string[]): Promise<void> {
       }
     }
 
-    // Find tsx binary
-    const fs = require("fs");
-    function findTsx() {
-      const possiblePaths = [
-        // When running from global installation
-        join(__dirname, "..", "node_modules", ".bin", "tsx"),
-        // When running from local development
-        join(__dirname, "..", "node_modules", ".bin", "tsx"),
-        // Fallback to global tsx
-        "tsx",
-      ];
-
-      for (const tsxPath of possiblePaths) {
-        try {
-          if (tsxPath === "tsx") {
-            // Try global tsx
-            execSync("which tsx", { stdio: "ignore" });
-            return "tsx";
-          } else {
-            // Check if file exists
-            if (fs.existsSync(tsxPath)) {
-              return tsxPath;
-            }
-          }
-        } catch (error) {
-          // Continue to next option
-        }
-      }
-
-      throw new Error("tsx not found");
-    }
-
+    // Use the shared tsx utility
     const tsxPath = findTsx();
     const scriptDir = require("path").dirname(__filename);
     const prManagerPath = join(scriptDir, "pr-manager.ts");
@@ -169,12 +139,12 @@ async function runExtractPR(input: string, options: WorkflowOptions = {}) {
   try {
     logInfo(`Extracting unified discussion for: ${input}`);
 
-    let flags = "";
-    if (options.jules) flags += " --jules";
-    if (options.summary) flags += " --summary";
+    let args = [input];
+    if (options.jules) args.push("--jules");
+    if (options.summary) args.push("--summary");
 
-    const command = `tsx ./scripts/extract-pr-discussion.ts ${input}${flags}`;
-    const output = execSync(command, { encoding: "utf-8" });
+    const extractScriptPath = join(__dirname, "extract-pr-discussion.ts");
+    const output = executeTsFile(extractScriptPath, args);
 
     if (options.save) {
       const filename = options.save.endsWith(".md")
